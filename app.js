@@ -477,8 +477,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // CUSTOMER ORDER HISTORY & "VOLVER A COMPRAR"
     // ========================================
+    let _loadingHistory = false;
     async function loadCustomerOrderHistory(phone) {
-        if (!phone || typeof db === 'undefined') return;
+        if (!phone || typeof db === 'undefined' || _loadingHistory) return;
+        _loadingHistory = true;
         try {
             const snapshot = await db.collection('orders')
                 .where('customerPhone', '==', phone)
@@ -491,6 +493,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         } catch(err) {
             console.error('Error loading order history:', err);
+        } finally {
+            _loadingHistory = false;
         }
     }
 
