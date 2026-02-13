@@ -17,8 +17,8 @@ from http.server import BaseHTTPRequestHandler
 # Credenciales del Botón de Pago Yappy (generadas en Yappy Comercial → Métodos de cobro → Botón de Pago)
 YAPPY_CONFIG = {
     "merchantId": "17e73b4c-ed59-4d8a-a5ec-623c4a7a4e07",
-    "domain": "https://xazaipty.com",
-    "ipnUrl": "https://xazaipty.com/api/pagosbg",
+    "domain": "https://www.xazaipty.com",
+    "ipnUrl": "https://www.xazaipty.com/api/pagosbg",
 }
 
 # Yappy V2 API endpoints (Producción)
