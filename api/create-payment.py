@@ -91,13 +91,11 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
     Step 2: Create payment order using the token from step 1.
     POST /payments/payment-wc
     """
-    # Use epochTime from validate response if available, otherwise generate
-    # Ensure paymentDate is in milliseconds (13 digits)
+    # Use epochTime from validate response EXACTLY as returned
     if epoch_time:
-        # If epoch from validate is in seconds (10 digits), convert to ms
-        payment_date = epoch_time * 1000 if epoch_time < 10000000000 else epoch_time
+        payment_date = epoch_time
     else:
-        payment_date = int(time.time() * 1000)
+        payment_date = int(time.time())
 
     # Clean orderId: Yappy requires alphanumeric only, max 15 chars
     clean_order_id = order_id.replace("-", "").replace("_", "")[:15]
@@ -106,7 +104,7 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
         "merchantId": merchant_id,
         "orderId": clean_order_id,
         "domain": domain,
-        "paymentDate": payment_date,
+        "paymentDate": str(payment_date),
         "aliasYappy": "",
         "ipnUrl": ipn_url,
         "discount": f"{discount:.2f}",
