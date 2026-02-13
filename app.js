@@ -1373,8 +1373,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (result.status && result.redirectUrl) {
                 // Save order locally before redirect
                 orders.push({
-                    id: orderCounter, number: orderId, user: currentUser.name,
-                    items: [...cart], subtotal, tax, total,
+                    id: orderCounter, number: orderId, user: currentUser ? currentUser.name : 'Invitado',
+                    items: [...cart], subtotal, total,
                     status: 'esperando_pago', date: new Date().toLocaleString('es-ES'),
                     yappyRedirect: result.redirectUrl
                 });
