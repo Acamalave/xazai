@@ -156,6 +156,7 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
         return {
             "error": f"Error HTTP {e.code} creando orden",
             "details": error_body,
+            "sentBody": order_body,
             "success": False
         }
     except Exception as e:
@@ -196,6 +197,7 @@ class handler(BaseHTTPRequestHandler):
 
             auth_token = validate_result["token"]
             epoch_time = validate_result.get("epochTime", None)
+            print(f"AUTH TOKEN: {auth_token[:30]}... EPOCH: {epoch_time}")
 
             # Step 2: Create order
             order_result = create_order(
