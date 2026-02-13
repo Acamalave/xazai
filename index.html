@@ -2,7 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
     <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -188,35 +191,125 @@
         </div>
     </div>
 
-    <!-- ADMIN PANEL -->
-    <div class="admin-overlay hidden" id="admin-overlay">
-        <div class="admin-panel">
-            <div class="admin-header">
-                <h2><i class="fas fa-cog"></i> Panel de Administración</h2>
-                <button class="admin-close" id="admin-close"><i class="fas fa-times"></i></button>
+    <!-- ADMIN DASHBOARD (Full Screen) -->
+    <div id="admin-dashboard" class="hidden">
+        <aside class="admin-sidebar">
+            <div class="admin-sidebar-header">
+                <img src="images/logo-xazai.png" alt="XAZAI" class="admin-logo-img">
+                <span class="admin-logo-text">Admin</span>
             </div>
-            <div class="admin-tabs">
-                <button class="admin-tab active" data-admin-tab="orders"><i class="fas fa-receipt"></i> Pedidos</button>
-                <button class="admin-tab" data-admin-tab="products"><i class="fas fa-utensils"></i> Productos</button>
-            </div>
-            <div class="admin-content">
-                <div class="admin-orders" id="admin-orders">
-                    <div class="orders-filter">
+            <nav class="admin-nav">
+                <button class="admin-nav-btn active" data-section="orders">
+                    <i class="fas fa-receipt"></i>
+                    <span>Pedidos</span>
+                    <span class="admin-badge hidden" id="orders-badge">0</span>
+                </button>
+                <button class="admin-nav-btn" data-section="pos">
+                    <i class="fas fa-cash-register"></i>
+                    <span>Caja / POS</span>
+                </button>
+                <button class="admin-nav-btn" data-section="inventory">
+                    <i class="fas fa-boxes-stacked"></i>
+                    <span>Inventario</span>
+                </button>
+            </nav>
+            <button class="admin-logout-btn" id="admin-logout">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Cerrar Sesión</span>
+            </button>
+        </aside>
+        <main class="admin-main">
+            <!-- PEDIDOS Section -->
+            <section id="admin-sec-orders" class="admin-section">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-receipt"></i> Pedidos en Tiempo Real</h2>
+                    <div class="orders-filter" id="admin-orders-filter">
                         <button class="filter-btn active" data-status="all">Todos</button>
                         <button class="filter-btn" data-status="pendiente">Pendientes</button>
                         <button class="filter-btn" data-status="preparando">Preparando</button>
                         <button class="filter-btn" data-status="listo">Listos</button>
                         <button class="filter-btn" data-status="entregado">Entregados</button>
                     </div>
-                    <div class="orders-list" id="orders-list">
-                        <p class="no-orders">No hay pedidos aún</p>
+                </div>
+                <div class="admin-orders-grid" id="admin-orders-list">
+                    <p class="no-orders">No hay pedidos aún</p>
+                </div>
+            </section>
+
+            <!-- POS / CAJA Section -->
+            <section id="admin-sec-pos" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-cash-register"></i> Caja / POS</h2>
+                </div>
+                <div class="pos-layout">
+                    <div class="pos-products">
+                        <div class="pos-categories" id="pos-categories">
+                            <button class="pos-cat-btn active" data-cat="all">Todos</button>
+                        </div>
+                        <div class="pos-products-grid" id="pos-products-grid"></div>
+                    </div>
+                    <div class="pos-invoice">
+                        <div class="pos-invoice-header">
+                            <h3><i class="fas fa-file-invoice-dollar"></i> Factura</h3>
+                            <button class="pos-clear-btn" id="pos-clear"><i class="fas fa-trash"></i> Limpiar</button>
+                        </div>
+                        <div class="pos-invoice-items" id="pos-invoice-items">
+                            <p class="pos-empty">Agrega productos a la factura</p>
+                        </div>
+                        <div class="pos-invoice-totals">
+                            <div class="pos-total-line"><span>Subtotal</span><span id="pos-subtotal">$0.00</span></div>
+                            <div class="pos-total-line pos-total-main"><span>Total</span><span id="pos-total">$0.00</span></div>
+                        </div>
+                        <div class="pos-payment-method">
+                            <h4>Método de Pago</h4>
+                            <div class="pos-methods">
+                                <button class="pos-method-btn active" data-method="efectivo"><i class="fas fa-money-bill-wave"></i> Efectivo</button>
+                                <button class="pos-method-btn" data-method="yappy"><i class="fas fa-mobile-alt"></i> Yappy</button>
+                                <button class="pos-method-btn" data-method="tarjeta"><i class="fas fa-credit-card"></i> Tarjeta</button>
+                            </div>
+                            <div class="pos-cash-change" id="pos-cash-change">
+                                <div class="pos-cash-row">
+                                    <label>Recibido:</label>
+                                    <div class="pos-cash-input-wrap">
+                                        <span>$</span>
+                                        <input type="number" id="pos-cash-received" placeholder="0.00" min="0" step="0.01">
+                                    </div>
+                                </div>
+                                <div class="pos-cash-row pos-change-row">
+                                    <label>Cambio:</label>
+                                    <span id="pos-change-amount" class="pos-change-value">$0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="pos-charge-btn" id="pos-charge-btn" disabled>
+                            <i class="fas fa-check-circle"></i> Cobrar
+                        </button>
+                        <div class="pos-sales-today">
+                            <h4><i class="fas fa-chart-line"></i> Ventas de Hoy</h4>
+                            <div class="pos-sales-summary" id="pos-sales-summary">
+                                <div class="pos-sale-stat">
+                                    <span class="pos-sale-label">Ventas</span>
+                                    <span class="pos-sale-value" id="pos-sales-count">0</span>
+                                </div>
+                                <div class="pos-sale-stat">
+                                    <span class="pos-sale-label">Total</span>
+                                    <span class="pos-sale-value" id="pos-sales-total">$0.00</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="admin-products hidden" id="admin-products">
-                    <p class="admin-note">Gestión de productos disponible próximamente</p>
+            </section>
+
+            <!-- INVENTARIO Section -->
+            <section id="admin-sec-inventory" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-boxes-stacked"></i> Control de Inventario</h2>
+                    <p class="admin-section-subtitle">Activa o desactiva productos del menú en tiempo real</p>
                 </div>
-            </div>
-        </div>
+                <div class="inventory-list" id="inventory-list"></div>
+            </section>
+        </main>
     </div>
 
     <!-- ORDER CONFIRMATION -->
@@ -356,21 +449,11 @@
                 <i class="fas fa-shield-alt" style="font-size: 40px; color: var(--accent);"></i>
             </div>
             <h2>Acceso Administrador</h2>
-            <p class="login-subtitle">Ingresa las credenciales de admin</p>
+            <p class="login-subtitle">Ingresa tu correo de administrador</p>
             <form id="admin-login-form">
-                <div class="phone-input-group">
-                    <div class="country-select-wrapper">
-                        <select id="admin-country-code" class="country-code-select">
-                            <option value="+507" selected>🇵🇦 +507</option>
-                            <option value="+1">🇺🇸 +1</option>
-                            <option value="+52">🇲🇽 +52</option>
-                            <option value="+57">🇨🇴 +57</option>
-                        </select>
-                    </div>
-                    <div class="phone-number-wrapper">
-                        <i class="fas fa-phone"></i>
-                        <input type="tel" id="admin-login-phone" placeholder="Teléfono admin" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-                    </div>
+                <div class="phone-number-wrapper" style="width:100%;">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="admin-login-email" placeholder="correo@xazai.com" autocomplete="off">
                 </div>
                 <button type="submit" class="btn-login"><i class="fas fa-lock"></i> Ingresar como Admin</button>
             </form>
@@ -381,6 +464,14 @@
     <!-- TOAST NOTIFICATIONS -->
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
+    <script>
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+    </script>
     <script src="data.js"></script>
     <script src="app.js"></script>
 </body>

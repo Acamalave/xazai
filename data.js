@@ -4,7 +4,7 @@
 // ========================================
 
 const USERS = [
-    { phone: '+5076260xxxx', role: 'admin', name: 'Administrador' }
+    { email: 'admin@xazai.com', role: 'admin', name: 'Administrador' }
 ];
 
 const CATEGORIES = {

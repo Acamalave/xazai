@@ -2,6 +2,38 @@
 // XAZAI - Açai Bar & Smoothies App
 // ========================================
 
+// Block pinch-to-zoom globally (iOS Safari ignores viewport meta)
+document.addEventListener('gesturestart', function(e) { e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturechange', function(e) { e.preventDefault(); }, { passive: false });
+document.addEventListener('gestureend', function(e) { e.preventDefault(); }, { passive: false });
+
+// Block double-tap zoom (skip scrollable areas like category tabs)
+let lastTouchEnd = 0;
+document.addEventListener('touchend', function(e) {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+        if (!e.target.closest('.category-tabs')) {
+            e.preventDefault();
+        }
+    }
+    lastTouchEnd = now;
+}, { passive: false });
+
+// Block multi-touch zoom only
+document.addEventListener('touchmove', function(e) {
+    if (e.touches.length > 1) { e.preventDefault(); }
+}, { passive: false });
+
+// Enable native horizontal scroll on category tabs
+document.addEventListener('DOMContentLoaded', function() {
+    const tabs = document.querySelector('.category-tabs');
+    if (tabs) {
+        tabs.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
+        tabs.addEventListener('touchmove', function(e) { e.stopPropagation(); }, { passive: true });
+        tabs.addEventListener('touchend', function(e) { e.stopPropagation(); }, { passive: true });
+    }
+});
+
 document.addEventListener('DOMContentLoaded', function() {
     'use strict';
 
@@ -47,9 +79,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const adminPanelBtn = $('admin-panel-btn');
     const loginTriggerBtn = $('login-trigger-btn');
     const logoutBtn = $('logout-btn');
-    const adminOverlay = $('admin-overlay');
-    const adminClose = $('admin-close');
-    const ordersList = $('orders-list');
+    const ordersList = $('admin-orders-list');
     const confirmationOverlay = $('confirmation-overlay');
     const orderNumber = $('order-number');
     const btnConfirmOk = $('btn-confirm-ok');
@@ -93,20 +123,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const currentHour = now.getHours() + now.getMinutes() / 60;
 
         if (!hours) {
-            return { open: false, text: 'Cerrado · Miércoles' };
+            return { open: false, text: 'Cerrado' };
         }
 
         if (currentHour >= hours.open && currentHour < hours.close) {
-            const closeHour = hours.close > 12 ? (hours.close - 12) + ':00 PM' : hours.close + ':00 AM';
-            return { open: true, text: `Abierto · Hasta las ${closeHour}` };
+            return { open: true, text: 'Abierto' };
         }
 
-        if (currentHour < hours.open) {
-            return { open: false, text: `Cerrado · Abrimos a las ${hours.open}:00 AM` };
-        }
-
-        // After closing, find next open day
-        return { open: false, text: getNextOpenText(now) };
+        return { open: false, text: 'Cerrado' };
     }
 
     function getNextOpenText(now) {
@@ -288,6 +312,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ========================================
+    // INVENTORY CACHE (for client-side filtering)
+    // ========================================
+    let inventoryCache = {};
+
+    function isProductAvailable(productId) {
+        const inv = inventoryCache[String(productId)];
+        return inv ? inv.active !== false : true;
+    }
+
+    // ========================================
     // INIT - Go directly to menu
     // ========================================
     renderCategory('inicio');
@@ -416,7 +450,8 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = '';
         cats.forEach(catKey => {
             const cat = CATEGORIES[catKey];
-            const items = MENU_ITEMS.filter(i => i.category === catKey);
+            const items = MENU_ITEMS.filter(i => i.category === catKey && isProductAvailable(i.id));
+            if (items.length === 0) return;
             html += `<div class="category-divider"><h3><i class="fas ${cat.icon}"></i> ${cat.name}</h3></div>`;
             html += items.map(item => buildCardHTML(item)).join('');
         });
@@ -464,20 +499,66 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
     }
 
+    // Categories where the "Add" button adds directly to cart (no expand)
+    const DIRECT_ADD_CATEGORIES = ['bebidas'];
+
+    function isDirectAddProduct(productId) {
+        const product = MENU_ITEMS.find(i => i.id === productId);
+        return product && DIRECT_ADD_CATEGORIES.includes(product.category);
+    }
+
+    function addDirectToCart(productId) {
+        const product = MENU_ITEMS.find(i => i.id === productId);
+        if (!product) return;
+
+        // Check if already in cart, if so increment quantity
+        const existing = cart.find(i => i.productId === productId && i.toppings.length === 0);
+        if (existing) {
+            if (existing.quantity < 20) {
+                existing.quantity++;
+                existing.total = existing.basePrice * existing.quantity;
+            }
+        } else {
+            cart.push({
+                id: Date.now(),
+                productId: product.id,
+                name: product.name,
+                emoji: product.emoji,
+                size: 'único',
+                sizeMultiplier: 1,
+                toppings: [],
+                toppingsPrice: 0,
+                basePrice: product.price,
+                quantity: 1,
+                note: '',
+                total: product.price
+            });
+        }
+        updateCartUI();
+        showToast(`${product.name} agregado al carrito`, 'success');
+    }
+
     function bindAllCardEvents() {
         // Only listen for clicks on the MAIN part of the card (not the expand area)
         productsGrid.querySelectorAll('.card-h-main').forEach(main => {
             main.addEventListener('click', (e) => {
                 if (e.target.closest('.btn-card-add')) return;
                 const card = main.closest('.product-card-h');
-                toggleExpand(parseInt(card.dataset.id));
+                const productId = parseInt(card.dataset.id);
+                if (isDirectAddProduct(productId)) return; // No expand for direct-add products
+                toggleExpand(productId);
             });
         });
         productsGrid.querySelectorAll('.btn-card-add').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const card = btn.closest('.product-card-h');
-                toggleExpand(parseInt(card.dataset.id));
+                const productId = parseInt(card.dataset.id);
+                if (isDirectAddProduct(productId)) {
+                    addDirectToCart(productId);
+                } else {
+                    toggleExpand(productId);
+                }
             });
         });
         // Block all clicks inside expand areas from bubbling up
@@ -489,7 +570,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderProducts(category) {
-        const items = MENU_ITEMS.filter(i => i.category === category);
+        const items = MENU_ITEMS.filter(i => i.category === category && isProductAvailable(i.id));
         productsGrid.innerHTML = items.map(item => buildCardHTML(item)).join('');
         bindAllCardEvents();
     }
@@ -1327,7 +1408,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function processOrderDirect() {
-        // Fallback: process order without Yappy (for testing/cash orders)
+        // Process order and save to Firestore
         if (cart.length === 0) return;
         const deliveryAddress = $('delivery-address') ? $('delivery-address').value.trim() : '';
         if (!deliveryAddress) {
@@ -1338,15 +1419,29 @@ document.addEventListener('DOMContentLoaded', function() {
         orderCounter++;
         const subtotal = cart.reduce((s, i) => s + i.total, 0);
         const deliveryFee = 4.50;
-        orders.push({
-            id: orderCounter, number: `XZ-${orderCounter}`, user: currentUser.name,
-            items: [...cart], subtotal, delivery: deliveryFee, tip: currentTip,
+        const orderNum = `XZ-${orderCounter}`;
+        const orderData = {
+            number: orderNum,
+            customerName: currentUser ? currentUser.name : 'Invitado',
+            customerPhone: currentUser ? (currentUser.phone || '') : '',
+            items: cart.map(i => ({ name: i.name, emoji: i.emoji, size: i.size, quantity: i.quantity, toppings: i.toppings, total: i.total })),
+            subtotal, delivery: deliveryFee, tip: currentTip,
             total: subtotal + deliveryFee + currentTip,
             address: deliveryAddress,
             scheduled: scheduledSlot ? `${scheduledSlot.label} ${scheduledSlot.time}` : null,
-            status: 'pendiente', date: new Date().toLocaleString('es-ES')
-        });
-        orderNumber.textContent = `XZ-${orderCounter}`;
+            status: 'pendiente',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        // Save to Firestore
+        if (typeof db !== 'undefined') {
+            db.collection('orders').add(orderData).catch(err => console.error('Error saving order:', err));
+        }
+
+        // Also keep local
+        orders.push({ id: orderCounter, ...orderData, date: new Date().toLocaleString('es-ES') });
+
+        orderNumber.textContent = orderNum;
         cart = [];
         scheduledSlot = null;
         currentTip = 0;
@@ -1417,104 +1512,456 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ========================================
-    // ADMIN
+    // ADMIN DASHBOARD (Full Screen)
     // ========================================
-    adminPanelBtn.addEventListener('click', () => { userDropdown.classList.add('hidden'); adminOverlay.classList.remove('hidden'); renderOrders(); });
-    adminClose.addEventListener('click', () => adminOverlay.classList.add('hidden'));
+    const adminDashboard = $('admin-dashboard');
+    let adminMode = false;
+    let ordersUnsubscribe = null;
+    let posCart = [];
+    let posPaymentMethod = 'efectivo';
+    let todaySales = [];
+    let notificationSound = null;
 
-    document.querySelectorAll('.admin-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            $('admin-orders').classList.toggle('hidden', tab.dataset.adminTab !== 'orders');
-            $('admin-products').classList.toggle('hidden', tab.dataset.adminTab !== 'products');
-        });
+    // Create notification sound
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        notificationSound = {
+            play: function() {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(1100, audioCtx.currentTime + 0.1);
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.start(audioCtx.currentTime);
+                osc.stop(audioCtx.currentTime + 0.5);
+            }
+        };
+    } catch(e) { notificationSound = null; }
+
+    function enterAdminMode() {
+        adminMode = true;
+        // Hide client UI
+        document.querySelector('.navbar').classList.add('hidden');
+        menuSection.classList.add('hidden');
+        buildBowlSection.classList.add('hidden');
+        floatingCheckout.classList.add('hidden');
+        // Show admin dashboard
+        adminDashboard.classList.remove('hidden');
+        // Start Firestore listeners
+        startOrdersListener();
+        loadInventory();
+        renderPOS();
+        loadTodaySales();
+    }
+
+    function exitAdminMode() {
+        adminMode = false;
+        // Stop listeners
+        if (ordersUnsubscribe) { ordersUnsubscribe(); ordersUnsubscribe = null; }
+        // Hide admin dashboard
+        adminDashboard.classList.add('hidden');
+        // Show client UI
+        document.querySelector('.navbar').classList.remove('hidden');
+        menuSection.classList.remove('hidden');
+        floatingCheckout.classList.toggle('hidden', cart.length === 0);
+        // Reset user
+        currentUser = null;
+        userName.textContent = 'Mi Cuenta';
+        adminPanelBtn.classList.add('hidden');
+        logoutBtn.classList.add('hidden');
+        loginTriggerBtn.classList.remove('hidden');
+        renderCategory('inicio');
+        showToast('Sesión admin cerrada', 'info');
+    }
+
+    // Admin logout button
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('#admin-logout')) exitAdminMode();
     });
 
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            renderOrders(btn.dataset.status);
-        });
+    // Admin sidebar navigation
+    document.addEventListener('click', (e) => {
+        const navBtn = e.target.closest('.admin-nav-btn');
+        if (!navBtn) return;
+        document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+        navBtn.classList.add('active');
+        const section = navBtn.dataset.section;
+        document.querySelectorAll('.admin-section').forEach(s => s.classList.add('hidden'));
+        $('admin-sec-' + section).classList.remove('hidden');
     });
 
-    function renderOrders(filterStatus = 'all') {
-        const filtered = filterStatus === 'all' ? orders : orders.filter(o => o.status === filterStatus);
-        if (!filtered.length) { ordersList.innerHTML = '<p class="no-orders">No hay pedidos</p>'; return; }
+    // Admin orders filter
+    document.addEventListener('click', (e) => {
+        const filterBtn = e.target.closest('#admin-orders-filter .filter-btn');
+        if (!filterBtn) return;
+        document.querySelectorAll('#admin-orders-filter .filter-btn').forEach(b => b.classList.remove('active'));
+        filterBtn.classList.add('active');
+        renderAdminOrders(filterBtn.dataset.status);
+    });
 
-        ordersList.innerHTML = filtered.map(order => `
-            <div class="order-card">
+    // ========================================
+    // FIRESTORE: ORDERS (Real-time)
+    // ========================================
+    let firestoreOrders = [];
+    let lastOrderCount = 0;
+
+    function startOrdersListener() {
+        if (ordersUnsubscribe) ordersUnsubscribe();
+        const ordersRef = db.collection('orders').orderBy('createdAt', 'desc').limit(100);
+        ordersUnsubscribe = ordersRef.onSnapshot(snapshot => {
+            const newOrders = [];
+            snapshot.forEach(doc => {
+                newOrders.push({ id: doc.id, ...doc.data() });
+            });
+
+            // Check for new orders (sound notification)
+            const pendingCount = newOrders.filter(o => o.status === 'pendiente').length;
+            if (pendingCount > lastOrderCount && lastOrderCount > 0) {
+                if (notificationSound) {
+                    try { notificationSound.play(); } catch(e) {}
+                }
+            }
+            lastOrderCount = pendingCount;
+
+            // Update badge
+            const badge = $('orders-badge');
+            if (pendingCount > 0) {
+                badge.textContent = pendingCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            firestoreOrders = newOrders;
+            const activeFilter = document.querySelector('#admin-orders-filter .filter-btn.active');
+            renderAdminOrders(activeFilter ? activeFilter.dataset.status : 'all');
+        });
+    }
+
+    function renderAdminOrders(filterStatus = 'all') {
+        const container = $('admin-orders-list');
+        const filtered = filterStatus === 'all' ? firestoreOrders : firestoreOrders.filter(o => o.status === filterStatus);
+
+        if (!filtered.length) {
+            container.innerHTML = '<p class="no-orders">No hay pedidos</p>';
+            return;
+        }
+
+        container.innerHTML = filtered.map(order => {
+            const items = order.items || [];
+            const dateStr = order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleString('es-PA') : '';
+            const isNew = order.status === 'pendiente';
+            return `
+            <div class="order-card ${isNew ? 'order-new' : ''}">
                 <div class="order-header">
-                    <div><strong>${order.number}</strong><span class="order-date">${order.date}</span></div>
+                    <div><strong>${order.number || order.id}</strong><span class="order-date">${dateStr}</span></div>
                     <span class="order-status status-${order.status}">${order.status}</span>
                 </div>
                 <div class="order-items-list">
-                    ${order.items.map(item => `<div class="order-item-line"><span>${item.emoji} ${item.name} x${item.quantity} (${item.size})</span><span>$${item.total.toFixed(2)}</span></div>`).join('')}
+                    ${items.map(item => `<div class="order-item-line"><span>${item.emoji || ''} ${item.name} x${item.quantity} (${item.size || ''})</span><span>$${(item.total || 0).toFixed(2)}</span></div>`).join('')}
                 </div>
-                <div class="order-total-line"><span>Total: <strong>$${order.total.toFixed(2)}</strong></span><span>Cliente: ${order.user}</span></div>
+                <div class="order-total-line">
+                    <span>Total: <strong>$${(order.total || 0).toFixed(2)}</strong></span>
+                    <span>Cliente: ${order.customerName || 'Invitado'}</span>
+                </div>
+                ${order.address ? `<div style="font-size:11px;color:var(--text-light);margin-bottom:8px;"><i class="fas fa-map-marker-alt" style="color:var(--accent);margin-right:4px;"></i>${order.address}</div>` : ''}
                 <div class="order-actions">
-                    ${order.status === 'pendiente' ? `<button class="order-action-btn btn-preparando" data-id="${order.id}">Preparando</button>` : ''}
-                    ${order.status === 'preparando' ? `<button class="order-action-btn btn-listo" data-id="${order.id}">Listo</button>` : ''}
-                    ${order.status === 'listo' ? `<button class="order-action-btn btn-entregado" data-id="${order.id}">Entregado</button>` : ''}
+                    ${order.status === 'pendiente' ? `<button class="order-action-btn btn-preparando" data-order-id="${order.id}">Preparando</button>` : ''}
+                    ${order.status === 'preparando' ? `<button class="order-action-btn btn-listo" data-order-id="${order.id}">Listo</button>` : ''}
+                    ${order.status === 'listo' ? `<button class="order-action-btn btn-entregado" data-order-id="${order.id}">Entregado</button>` : ''}
                 </div>
-            </div>
-        `).join('');
+            </div>`;
+        }).join('');
 
-        ordersList.querySelectorAll('.order-action-btn').forEach(btn => {
+        // Bind status change buttons
+        container.querySelectorAll('.order-action-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const order = orders.find(o => o.id === parseInt(btn.dataset.id));
-                if (!order) return;
-                if (btn.classList.contains('btn-preparando')) order.status = 'preparando';
-                else if (btn.classList.contains('btn-listo')) order.status = 'listo';
-                else if (btn.classList.contains('btn-entregado')) order.status = 'entregado';
-                renderOrders(document.querySelector('.filter-btn.active').dataset.status);
-                showToast(`Pedido ${order.number}: ${order.status}`, 'info');
+                const orderId = btn.dataset.orderId;
+                let newStatus = '';
+                if (btn.classList.contains('btn-preparando')) newStatus = 'preparando';
+                else if (btn.classList.contains('btn-listo')) newStatus = 'listo';
+                else if (btn.classList.contains('btn-entregado')) newStatus = 'entregado';
+                if (newStatus && orderId) {
+                    db.collection('orders').doc(orderId).update({ status: newStatus })
+                        .then(() => showToast(`Pedido actualizado: ${newStatus}`, 'success'))
+                        .catch(err => showToast('Error actualizando pedido', 'warning'));
+                }
             });
         });
     }
 
     // ========================================
-    // SECRET ADMIN ACCESS (long-press logo)
+    // FIRESTORE: INVENTORY
+    // ========================================
+    function loadInventory() {
+        db.collection('inventory').get().then(snapshot => {
+            inventoryCache = {};
+            snapshot.forEach(doc => {
+                inventoryCache[doc.id] = doc.data();
+            });
+            renderInventory();
+        });
+    }
+
+    function renderInventory() {
+        const container = $('inventory-list');
+        container.innerHTML = MENU_ITEMS.map(item => {
+            const inv = inventoryCache[String(item.id)];
+            const isActive = inv ? inv.active !== false : true;
+            return `
+            <div class="inventory-item ${!isActive ? 'inactive' : ''}">
+                ${item.image ? `<img src="${item.image}" class="inventory-img" alt="${item.name}">` : `<span class="inventory-emoji">${item.emoji}</span>`}
+                <div class="inventory-info">
+                    <div class="inventory-name">${item.name}</div>
+                    <div class="inventory-cat">${item.category}</div>
+                </div>
+                <span class="inventory-price">$${item.price.toFixed(2)}</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" data-product-id="${item.id}" ${isActive ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>`;
+        }).join('');
+
+        // Bind toggle events
+        container.querySelectorAll('.toggle-switch input').forEach(toggle => {
+            toggle.addEventListener('change', () => {
+                const productId = toggle.dataset.productId;
+                const active = toggle.checked;
+                const parentItem = toggle.closest('.inventory-item');
+                parentItem.classList.toggle('inactive', !active);
+                db.collection('inventory').doc(productId).set({ active }, { merge: true })
+                    .then(() => {
+                        inventoryCache[productId] = { active };
+                        showToast(`${active ? 'Activado' : 'Desactivado'}: ${MENU_ITEMS.find(i => i.id == productId)?.name}`, active ? 'success' : 'warning');
+                    })
+                    .catch(err => showToast('Error actualizando inventario', 'warning'));
+            });
+        });
+    }
+
+    // Load inventory on app start for client filtering
+    if (typeof db !== 'undefined') {
+        db.collection('inventory').onSnapshot(snapshot => {
+            snapshot.forEach(doc => {
+                inventoryCache[doc.id] = doc.data();
+            });
+            // Re-render current view if not admin
+            if (!adminMode) {
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab) renderCategory(activeTab.dataset.category);
+            }
+        });
+    }
+
+    // ========================================
+    // POS / CAJA
+    // ========================================
+    function renderPOS() {
+        // Render category buttons
+        const catsContainer = $('pos-categories');
+        const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
+        catsContainer.innerHTML = `<button class="pos-cat-btn active" data-cat="all">Todos</button>` +
+            cats.map(catKey => `<button class="pos-cat-btn" data-cat="${catKey}"><i class="fas ${CATEGORIES[catKey].icon}"></i> ${CATEGORIES[catKey].name}</button>`).join('');
+
+        catsContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.pos-cat-btn');
+            if (!btn) return;
+            catsContainer.querySelectorAll('.pos-cat-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderPOSProducts(btn.dataset.cat);
+        });
+
+        renderPOSProducts('all');
+
+        // Payment method buttons
+        document.querySelectorAll('.pos-method-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.pos-method-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                posPaymentMethod = btn.dataset.method;
+                const cashChange = $('pos-cash-change');
+                cashChange.style.display = posPaymentMethod === 'efectivo' ? 'block' : 'none';
+            });
+        });
+
+        // Cash received input
+        const cashInput = $('pos-cash-received');
+        if (cashInput) {
+            cashInput.addEventListener('input', () => {
+                const received = parseFloat(cashInput.value) || 0;
+                const total = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+                const change = received - total;
+                $('pos-change-amount').textContent = change >= 0 ? '$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
+                $('pos-change-amount').style.color = change >= 0 ? '#00e096' : '#ff6b6b';
+            });
+        }
+
+        // Clear invoice
+        $('pos-clear').addEventListener('click', () => {
+            posCart = [];
+            renderPOSInvoice();
+        });
+
+        // Charge button
+        $('pos-charge-btn').addEventListener('click', processPOSSale);
+    }
+
+    function renderPOSProducts(category) {
+        const container = $('pos-products-grid');
+        const items = category === 'all' ? MENU_ITEMS : MENU_ITEMS.filter(i => i.category === category);
+        container.innerHTML = items.map(item => {
+            const isAvailable = isProductAvailable(item.id);
+            return `
+            <div class="pos-product-card ${!isAvailable ? 'disabled' : ''}" data-product-id="${item.id}">
+                ${item.image ? `<img src="${item.image}" class="pos-product-img" alt="${item.name}">` : `<span class="pos-product-emoji">${item.emoji}</span>`}
+                <span class="pos-product-name">${item.name}</span>
+                <span class="pos-product-price">$${item.price.toFixed(2)}</span>
+            </div>`;
+        }).join('');
+
+        container.querySelectorAll('.pos-product-card:not(.disabled)').forEach(card => {
+            card.addEventListener('click', () => {
+                const productId = parseInt(card.dataset.productId);
+                addToPOSCart(productId);
+            });
+        });
+    }
+
+    function addToPOSCart(productId) {
+        const product = MENU_ITEMS.find(i => i.id === productId);
+        if (!product) return;
+        const existing = posCart.find(i => i.productId === productId);
+        if (existing) {
+            existing.qty++;
+        } else {
+            posCart.push({ productId, name: product.name, emoji: product.emoji, price: product.price, qty: 1 });
+        }
+        renderPOSInvoice();
+    }
+
+    function renderPOSInvoice() {
+        const container = $('pos-invoice-items');
+        const chargeBtn = $('pos-charge-btn');
+
+        if (posCart.length === 0) {
+            container.innerHTML = '<p class="pos-empty">Agrega productos a la factura</p>';
+            $('pos-subtotal').textContent = '$0.00';
+            $('pos-total').textContent = '$0.00';
+            chargeBtn.disabled = true;
+            return;
+        }
+
+        chargeBtn.disabled = false;
+        container.innerHTML = posCart.map((item, idx) => `
+            <div class="pos-inv-item">
+                <div class="pos-inv-info">
+                    <div class="pos-inv-name">${item.emoji} ${item.name}</div>
+                    <div class="pos-inv-price-unit">$${item.price.toFixed(2)} c/u</div>
+                </div>
+                <div class="pos-inv-qty">
+                    <button data-pos-action="minus" data-pos-idx="${idx}">-</button>
+                    <span>${item.qty}</span>
+                    <button data-pos-action="plus" data-pos-idx="${idx}">+</button>
+                </div>
+                <span class="pos-inv-total">$${(item.price * item.qty).toFixed(2)}</span>
+                <button class="pos-inv-remove" data-pos-remove="${idx}"><i class="fas fa-trash-alt"></i></button>
+            </div>
+        `).join('');
+
+        const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+        $('pos-subtotal').textContent = '$' + subtotal.toFixed(2);
+        $('pos-total').textContent = '$' + subtotal.toFixed(2);
+
+        // Bind qty buttons
+        container.querySelectorAll('[data-pos-action]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.posIdx);
+                if (btn.dataset.posAction === 'plus') {
+                    posCart[idx].qty++;
+                } else if (btn.dataset.posAction === 'minus') {
+                    if (posCart[idx].qty > 1) posCart[idx].qty--;
+                    else posCart.splice(idx, 1);
+                }
+                renderPOSInvoice();
+            });
+        });
+
+        container.querySelectorAll('[data-pos-remove]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                posCart.splice(parseInt(btn.dataset.posRemove), 1);
+                renderPOSInvoice();
+            });
+        });
+
+        // Update change calculation
+        const cashInput = $('pos-cash-received');
+        if (cashInput && cashInput.value) {
+            const received = parseFloat(cashInput.value) || 0;
+            const change = received - subtotal;
+            $('pos-change-amount').textContent = change >= 0 ? '$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
+        }
+    }
+
+    function processPOSSale() {
+        if (posCart.length === 0) return;
+        const total = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+
+        const sale = {
+            items: posCart.map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, total: i.price * i.qty })),
+            total,
+            paymentMethod: posPaymentMethod,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            date: new Date().toLocaleDateString('es-PA')
+        };
+
+        db.collection('sales').add(sale).then(() => {
+            showToast(`Venta registrada: $${total.toFixed(2)} (${posPaymentMethod})`, 'success');
+            posCart = [];
+            renderPOSInvoice();
+            const cashInput = $('pos-cash-received');
+            if (cashInput) { cashInput.value = ''; $('pos-change-amount').textContent = '$0.00'; }
+            loadTodaySales();
+        }).catch(err => showToast('Error registrando venta', 'warning'));
+    }
+
+    function loadTodaySales() {
+        const today = new Date().toLocaleDateString('es-PA');
+        db.collection('sales').where('date', '==', today).get().then(snapshot => {
+            let count = 0, total = 0;
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                count++;
+                total += data.total || 0;
+            });
+            $('pos-sales-count').textContent = count;
+            $('pos-sales-total').textContent = '$' + total.toFixed(2);
+        });
+    }
+
+    // Old admin panel button now enters admin mode
+    adminPanelBtn.addEventListener('click', () => {
+        userDropdown.classList.add('hidden');
+        enterAdminMode();
+    });
+
+    // ========================================
+    // ADMIN ACCESS (click logo)
     // ========================================
     (function() {
         const logoEl = document.querySelector('.logo-img-nav') || document.querySelector('.logo-small');
         if (!logoEl) return;
 
-        let pressTimer = null;
-        let pressStart = 0;
-        const LONG_PRESS_MS = 3000; // 3 seconds
-
-        function startPress(e) {
-            pressStart = Date.now();
-            pressTimer = setTimeout(() => {
-                // Open admin login modal
-                $('admin-login-modal').classList.remove('hidden');
-                document.body.style.overflow = 'hidden';
-                const adminPhone = $('admin-login-phone');
-                if (adminPhone) adminPhone.focus();
-            }, LONG_PRESS_MS);
-        }
-
-        function cancelPress() {
-            if (pressTimer) {
-                clearTimeout(pressTimer);
-                pressTimer = null;
-            }
-        }
-
-        // Mouse events
-        logoEl.addEventListener('mousedown', startPress);
-        logoEl.addEventListener('mouseup', cancelPress);
-        logoEl.addEventListener('mouseleave', cancelPress);
-
-        // Touch events (mobile)
-        logoEl.addEventListener('touchstart', (e) => {
-            startPress(e);
-        }, { passive: true });
-        logoEl.addEventListener('touchend', cancelPress);
-        logoEl.addEventListener('touchcancel', cancelPress);
-        logoEl.addEventListener('touchmove', cancelPress);
+        logoEl.addEventListener('click', () => {
+            $('admin-login-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            const adminEmail = $('admin-login-email');
+            if (adminEmail) adminEmail.focus();
+        });
 
         // Close admin login modal
         document.addEventListener('click', (e) => {
@@ -1533,26 +1980,24 @@ document.addEventListener('DOMContentLoaded', function() {
         if (adminLoginForm) {
             adminLoginForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                const phone = $('admin-login-phone').value.trim().replace(/\D/g, '');
-                const code = $('admin-country-code').value;
+                const email = $('admin-login-email').value.trim().toLowerCase();
 
-                if (!phone || phone.length < 6) {
+                if (!email || !email.includes('@')) {
                     const errEl = $('admin-login-error');
-                    errEl.textContent = 'Número inválido';
+                    errEl.textContent = 'Ingresa un correo válido';
                     errEl.classList.add('show');
                     setTimeout(() => errEl.classList.remove('show'), 3000);
                     return;
                 }
 
-                const fullPhone = code + phone;
-                const isAdmin = USERS.find(u => u.role === 'admin' && u.phone === fullPhone);
+                const isAdmin = USERS.find(u => u.role === 'admin' && u.email === email);
 
                 if (isAdmin) {
                     currentUser = {
-                        username: fullPhone,
+                        username: email,
                         role: 'admin',
                         name: isAdmin.name || 'Admin',
-                        phone: fullPhone
+                        email: email
                     };
                     userName.textContent = isAdmin.name || 'Admin';
                     loginTriggerBtn.classList.add('hidden');
@@ -1561,15 +2006,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     $('admin-login-modal').classList.add('hidden');
                     document.body.style.overflow = '';
-                    $('admin-login-phone').value = '';
+                    $('admin-login-email').value = '';
                     showToast('Bienvenido, Administrador', 'success');
 
-                    // Auto-open admin panel
-                    adminOverlay.classList.remove('hidden');
-                    renderOrders();
+                    // Enter full admin mode
+                    enterAdminMode();
                 } else {
                     const errEl = $('admin-login-error');
-                    errEl.textContent = 'Acceso denegado. Número no autorizado.';
+                    errEl.textContent = 'Acceso denegado. Correo no autorizado.';
                     errEl.classList.add('show');
                     setTimeout(() => errEl.classList.remove('show'), 3000);
                 }
