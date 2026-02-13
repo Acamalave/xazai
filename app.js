@@ -1380,10 +1380,11 @@ document.addEventListener('DOMContentLoaded', function() {
         renderPaymentDetail();
 
         const paymentModal = $('payment-modal');
-        // Reset state
+        // Reset Yappy state
         $('yappy-loading').classList.add('hidden');
         $('yappy-error').classList.add('hidden');
-        $('btn-pay-yappy').disabled = false;
+        const btnYappy = document.querySelector('btn-yappy');
+        if (btnYappy) btnYappy.isButtonLoading = false;
 
         // Show scheduled banner if applicable
         const scheduledBanner = $('scheduled-banner');
@@ -1744,79 +1745,173 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(() => deliveryMap.invalidateSize(), 300);
     }
 
-    async function initiateYappyPayment() {
-        const subtotal = cart.reduce((s, i) => s + i.total, 0);
-        const deliveryFee = 4.50;
-        const total = subtotal + deliveryFee + currentTip;
-        const deliveryAddress = $('delivery-address') ? $('delivery-address').value.trim() : '';
+    // ========================================
+    // YAPPY V2 WEB COMPONENT INTEGRATION
+    // ========================================
+    let yappyCurrentOrderId = null;
 
-        if (!deliveryAddress) {
-            showToast('Por favor ingresa tu dirección de entrega', 'error');
-            $('delivery-address').focus();
+    function setupYappyWebComponent() {
+        const btnYappy = document.querySelector("btn-yappy");
+        if (!btnYappy) {
+            console.warn('Yappy web component not found');
             return;
         }
 
-        orderCounter++;
-        localStorage.setItem('xazai_orderCounter', orderCounter);
-        const orderId = `XZ-${orderCounter}`;
+        // Check if Yappy channel is online
+        btnYappy.addEventListener('isYappyOnline', (event) => {
+            console.log('Yappy online status:', event.detail);
+            if (event.detail === false || event.detail === 'false') {
+                showToast('Yappy no está disponible en este momento', 'warning');
+            }
+        });
 
-        // Show loading
-        $('btn-pay-yappy').disabled = true;
-        $('yappy-loading').classList.remove('hidden');
-        $('yappy-error').classList.add('hidden');
-
-        try {
-            const response = await fetch('/api/create-payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    orderId: orderId,
-                    total: total,
-                    subtotal: subtotal,
-                    delivery: deliveryFee,
-                    address: deliveryAddress,
-                    items: cart.map(i => ({ name: i.name, qty: i.quantity, price: i.total }))
-                })
-            });
-
-            const result = await response.json();
-
-            if (result.status && result.redirectUrl) {
-                // Save order locally before redirect
-                orders.push({
-                    id: orderCounter, number: orderId, user: currentUser ? currentUser.name : 'Invitado',
-                    items: [...cart], subtotal, total,
-                    status: 'esperando_pago', date: new Date().toLocaleString('es-ES'),
-                    yappyRedirect: result.redirectUrl
-                });
-
-                // Save cart to localStorage so we can clear it after payment
-                localStorage.setItem('xazai_pending_order', JSON.stringify({
-                    orderId, cart: [...cart]
-                }));
-
-                showToast('Redirigiendo a Yappy...', 'info');
-
-                // Redirect to Yappy payment page
-                setTimeout(() => {
-                    window.location.href = result.redirectUrl;
-                }, 800);
-
-            } else {
-                // Show error
-                $('yappy-loading').classList.add('hidden');
-                $('yappy-error').classList.remove('hidden');
-                $('yappy-error-msg').textContent = result.error || 'Error al conectar con Yappy';
-                $('btn-pay-yappy').disabled = false;
+        // Event: Click on Yappy button
+        btnYappy.addEventListener('eventClick', async () => {
+            // Validate delivery address
+            const deliveryAddress = $('delivery-address') ? $('delivery-address').value.trim() : '';
+            if (!deliveryAddress) {
+                showToast('Por favor ingresa tu dirección de entrega', 'error');
+                if ($('delivery-address')) $('delivery-address').focus();
+                return;
             }
 
-        } catch (err) {
-            $('yappy-loading').classList.add('hidden');
+            // Prepare order data
+            const subtotal = cart.reduce((s, i) => s + i.total, 0);
+            const deliveryFee = 4.50;
+            const total = subtotal + deliveryFee + currentTip;
+            orderCounter++;
+            localStorage.setItem('xazai_orderCounter', orderCounter);
+            const orderId = `XZ-${orderCounter}`;
+            yappyCurrentOrderId = orderId;
+
+            // Show loading
+            $('yappy-loading').classList.remove('hidden');
+            $('yappy-error').classList.add('hidden');
+            btnYappy.isButtonLoading = true;
+
+            try {
+                // Call our backend which makes the 2 Yappy API calls
+                const response = await fetch('/api/create-payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        orderId: orderId,
+                        total: total,
+                        subtotal: subtotal,
+                        taxes: 0,
+                        discount: 0
+                    })
+                });
+
+                const result = await response.json();
+                console.log('Yappy create-payment response:', result);
+
+                if (result.status && result.transactionId && result.token && result.documentName) {
+                    // Save pending order
+                    localStorage.setItem('xazai_pending_order', JSON.stringify({
+                        orderId, cart: [...cart], deliveryAddress, total, subtotal
+                    }));
+
+                    // Save order to Firestore as waiting for payment
+                    saveOrderToFirestore(orderId, deliveryAddress, 'esperando_pago', total, subtotal);
+
+                    // Hand off data to the web component — it opens the Yappy payment modal
+                    btnYappy.eventPayment({
+                        transactionId: result.transactionId,
+                        documentName: result.documentName,
+                        token: result.token
+                    });
+
+                    $('yappy-loading').classList.add('hidden');
+                } else {
+                    // Show error from backend
+                    $('yappy-loading').classList.add('hidden');
+                    $('yappy-error').classList.remove('hidden');
+                    $('yappy-error-msg').textContent = result.error || 'Error al crear orden en Yappy';
+                    btnYappy.isButtonLoading = false;
+                }
+            } catch (err) {
+                console.error('Yappy payment error:', err);
+                $('yappy-loading').classList.add('hidden');
+                $('yappy-error').classList.remove('hidden');
+                $('yappy-error-msg').textContent = 'Error de conexión. Verifica tu internet.';
+                btnYappy.isButtonLoading = false;
+            }
+        });
+
+        // Event: Payment successful
+        btnYappy.addEventListener("eventSuccess", (event) => {
+            console.log("Yappy pago exitoso:", event.detail);
+            const orderId = yappyCurrentOrderId || `XZ-${orderCounter}`;
+
+            // Clear cart
+            cart = [];
+            updateCartUI();
+            localStorage.removeItem('xazai_pending_order');
+
+            // Close payment modal and show confirmation
+            closePaymentModal();
+            orderNumber.textContent = orderId;
+            confirmationOverlay.classList.remove('hidden');
+            showToast('¡Pago confirmado con Yappy!', 'success');
+
+            // Update Firestore: mark as paid
+            updateOrderPaymentStatus(orderId, 'pendiente', true);
+            btnYappy.isButtonLoading = false;
+        });
+
+        // Event: Payment failed/error
+        btnYappy.addEventListener("eventError", (event) => {
+            console.log("Yappy pago fallido:", event.detail);
             $('yappy-error').classList.remove('hidden');
-            $('yappy-error-msg').textContent = 'Error de conexión. Verifica tu internet.';
-            $('btn-pay-yappy').disabled = false;
-        }
+            $('yappy-error-msg').textContent = 'El pago no se completó. Intenta de nuevo.';
+            showToast('El pago no se completó. Intenta de nuevo.', 'warning');
+            btnYappy.isButtonLoading = false;
+        });
+
+        console.log('Yappy V2 web component initialized');
     }
+
+    function saveOrderToFirestore(orderId, address, status, total, subtotal) {
+        if (typeof db === 'undefined') return;
+        const deliveryFee = 4.50;
+        db.collection('orders').add({
+            number: orderId,
+            items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, total: i.total, emoji: i.emoji || '' })),
+            subtotal: subtotal || cart.reduce((s, i) => s + i.total, 0),
+            delivery: deliveryFee,
+            tip: currentTip,
+            total: total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + currentTip),
+            status: status,
+            paymentMethod: 'yappy',
+            paymentConfirmed: false,
+            customerName: currentUser ? currentUser.name : 'Invitado',
+            customerPhone: currentUser ? currentUser.phone : '',
+            address: address,
+            scheduledSlot: scheduledSlot || null,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            console.log(`Order ${orderId} saved to Firestore`);
+        }).catch(err => {
+            console.error('Error saving order:', err);
+        });
+    }
+
+    function updateOrderPaymentStatus(orderId, status, paymentConfirmed) {
+        if (typeof db === 'undefined') return;
+        db.collection('orders').where('number', '==', orderId).get().then(snap => {
+            snap.forEach(doc => {
+                doc.ref.update({
+                    status: status,
+                    paymentConfirmed: paymentConfirmed,
+                    paymentDate: new Date()
+                });
+            });
+        }).catch(err => console.error('Error updating payment status:', err));
+    }
+
+    // Initialize Yappy web component after DOM is ready
+    setTimeout(setupYappyWebComponent, 1000);
 
     function processOrderDirect() {
         // Process order and save to Firestore
@@ -1863,54 +1958,6 @@ document.addEventListener('DOMContentLoaded', function() {
         confirmationOverlay.classList.remove('hidden');
     }
 
-    // Check for payment return (after Yappy redirect)
-    function checkPaymentReturn() {
-        const params = new URLSearchParams(window.location.search);
-        const payment = params.get('payment');
-        const orderId = params.get('order');
-
-        if (payment && orderId) {
-            // Clean URL
-            window.history.replaceState({}, '', '/');
-
-            const pendingOrder = JSON.parse(localStorage.getItem('xazai_pending_order') || 'null');
-
-            if (payment === 'success') {
-                // Clear saved cart
-                cart = [];
-                updateCartUI();
-                localStorage.removeItem('xazai_pending_order');
-                orderNumber.textContent = orderId;
-                confirmationOverlay.classList.remove('hidden');
-                showToast('Pago confirmado con Yappy!', 'success');
-
-                // Poll for actual status from server
-                pollPaymentStatus(orderId);
-
-            } else {
-                showToast('El pago no se completó. Intenta de nuevo.', 'warning');
-            }
-        }
-    }
-
-    async function pollPaymentStatus(orderId) {
-        // Check status from our server (which gets it from Yappy callback)
-        for (let i = 0; i < 10; i++) {
-            try {
-                const res = await fetch(`/api/payment-status/${orderId}`);
-                const data = await res.json();
-                if (data.status === 'completed') {
-                    console.log(`Pago ${orderId} confirmado por Yappy. Ref: ${data.confirmationNumber}`);
-                    return;
-                }
-            } catch(e) { /* continue polling */ }
-            await new Promise(r => setTimeout(r, 3000)); // Wait 3 seconds
-        }
-    }
-
-    // Init: check if returning from Yappy
-    checkPaymentReturn();
-
     btnCheckout.addEventListener('click', handleCheckout);
     floatingCheckoutBtn.addEventListener('click', handleCheckout);
     btnConfirmOk.addEventListener('click', () => {
@@ -1932,8 +1979,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Payment modal events (delegated - elements created in HTML)
+    // Note: Yappy button is now handled by the web component (setupYappyWebComponent)
     document.addEventListener('click', (e) => {
-        if (e.target.closest('#btn-pay-yappy')) initiateYappyPayment();
         if (e.target.closest('#btn-pay-cash')) processOrderDirect();
         if (e.target.closest('#payment-modal-close')) closePaymentModal();
         if (e.target.id === 'payment-modal') closePaymentModal();

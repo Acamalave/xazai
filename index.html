@@ -532,20 +532,13 @@
             <div class="payment-methods">
                 <h3>Selecciona tu método de pago</h3>
 
-                <button class="btn-pay-yappy" id="btn-pay-yappy">
-                    <div class="pay-btn-content">
-                        <div class="pay-icon-yappy">
-                            <i class="fas fa-mobile-alt"></i>
-                            <span>Yappy</span>
-                        </div>
-                        <span class="pay-label">Pagar con Yappy</span>
-                    </div>
-                    <i class="fas fa-arrow-right"></i>
-                </button>
+                <div id="yappy-btn-container">
+                    <btn-yappy theme="blue" rounded="true"></btn-yappy>
+                </div>
 
                 <div class="yappy-loading hidden" id="yappy-loading">
                     <div class="spinner"></div>
-                    <span>Conectando con Yappy...</span>
+                    <span>Procesando pago con Yappy...</span>
                 </div>
 
                 <div class="yappy-error hidden" id="yappy-error">
@@ -619,6 +612,7 @@
         const db = firebase.firestore();
     </script>
     <script src="data.js"></script>
+    <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

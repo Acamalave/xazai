@@ -1,190 +1,156 @@
 """
-XAZAI - Yappy Payment Serverless Function (Vercel)
+XAZAI - Yappy Payment V2 Serverless Function (Vercel)
 Handles POST /api/create-payment
+New Botón de Pago Yappy integration using web component flow.
 """
 
 import json
-import hmac
-import hashlib
-import base64
 import time
 import urllib.request
-import urllib.parse
 import urllib.error
 import ssl
 from http.server import BaseHTTPRequestHandler
 
 # ========================================
-# YAPPY CONFIGURATION
+# YAPPY V2 CONFIGURATION
 # ========================================
+# Credenciales del Botón de Pago Yappy (generadas en Yappy Comercial → Métodos de cobro → Botón de Pago)
 YAPPY_CONFIG = {
     "merchantId": "17e73b4c-ed59-4d8a-a5ec-623c4a7a4e07",
-    "secretToken": "WVBfRjc2MjFBQ0UtOEY2OS0zRkY1LUE3NkEtMDE5OEU5MUI4QUI1LjE3ZTczYjRjLWVkNTktNGQ4YS1hNWVjLTYyM2M0YTdhNGUwNw==",
-    "sandbox": "no",  # Produccion activa
+    "domain": "https://xazaipty.com",
+    "ipnUrl": "https://xazaipty.com/api/pagosbg",
 }
 
-YAPPY_API_URL = "https://pagosbg.bgeneral.com/validateapikeymerchand"
-YAPPY_REDIRECT_BASE = "https://pagosbg.bgeneral.com"
+# Yappy V2 API endpoints (Producción)
+YAPPY_API_BASE = "https://apipagosbg.bgeneral.cloud"
+VALIDATE_MERCHANT_URL = f"{YAPPY_API_BASE}/payments/validate/merchant"
+CREATE_ORDER_URL = f"{YAPPY_API_BASE}/payments/payment-wc"
 
 
-def decode_secret(secret_token):
-    """Decode the base64 secret token and extract the signing key"""
-    try:
-        for attempt in [secret_token, secret_token[:-1]]:
-            try:
-                padded = attempt + '=' * (4 - len(attempt) % 4) if len(attempt) % 4 else attempt
-                decoded = base64.b64decode(padded).decode('utf-8')
-                if '.' in decoded:
-                    return decoded.split('.')
-                else:
-                    return [decoded]
-            except Exception:
-                continue
-        return None
-    except Exception:
-        return None
-
-
-def generate_signature(config, order_id, total, subtotal, taxes, payment_date):
-    """Generate HMAC-SHA256 signature for Yappy"""
-    secret_parts = decode_secret(config["secretToken"])
-    if not secret_parts:
-        return None
-
-    signing_key = secret_parts[0]
-
-    sign_string = (
-        f"{total:.2f}"
-        f"{config['merchantId']}"
-        f"{subtotal:.2f}"
-        f"{taxes:.2f}"
-        f"{payment_date}"
-        f"YAP"
-        f"VEN"
-        f"{order_id}"
-        f"{config['successUrl']}"
-        f"{config['failUrl']}"
-        f"{config['domainUrl']}"
-    )
-
-    signature = hmac.new(
-        signing_key.encode('utf-8'),
-        sign_string.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-
-    return signature
-
-
-def get_merchant_api_key(secret_token):
-    """Get the API key for the x-api-key header"""
-    secret_parts = decode_secret(secret_token)
-    if secret_parts and len(secret_parts) > 1:
-        return secret_parts[1]
-    return None
-
-
-def create_yappy_payment(order_id, total, subtotal, taxes, domain):
-    """Create a Yappy payment and return the redirect URL"""
-    config = YAPPY_CONFIG.copy()
-    config["domainUrl"] = domain
-    config["successUrl"] = f"{domain}/?payment=success&order={order_id}"
-    config["failUrl"] = f"{domain}/?payment=fail&order={order_id}"
-
-    # Step 1: Validate merchant with Yappy API
-    merchant_secret = get_merchant_api_key(config["secretToken"])
-    if not merchant_secret:
-        return {"error": "Error decodificando credenciales", "status": False}
-
+def validate_merchant(merchant_id, domain):
+    """
+    Step 1: Validate merchant and get authorization token.
+    POST /payments/validate/merchant
+    """
     request_body = json.dumps({
-        "merchantId": config["merchantId"],
-        "urlDomain": config["domainUrl"]
+        "merchantId": merchant_id,
+        "urlDomain": domain
     }).encode('utf-8')
 
     headers = {
-        "x-api-key": merchant_secret,
-        "Content-Type": "application/json",
-        "version": "P1.0.0"
+        "Content-Type": "application/json"
     }
 
     try:
         ctx = ssl.create_default_context()
-
         req = urllib.request.Request(
-            YAPPY_API_URL,
+            VALIDATE_MERCHANT_URL,
             data=request_body,
             headers=headers,
             method='POST'
         )
 
-        with urllib.request.urlopen(req, context=ctx, timeout=10) as response:
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
             result = json.loads(response.read().decode())
 
-        if not result.get("success"):
+        # Check response structure: {status: {code, description}, body: {epochTime, token}}
+        status_obj = result.get("status", {})
+        body_obj = result.get("body", {})
+
+        if not body_obj.get("token"):
             return {
-                "error": "Yappy no valido el comercio. Verifica tus credenciales.",
+                "error": f"Yappy no validó el comercio: {status_obj.get('description', 'Sin detalle')}",
                 "details": str(result),
-                "status": False
+                "success": False
             }
 
-        jwt_token = result.get("accessToken", "")
+        return {
+            "success": True,
+            "token": body_obj["token"],
+            "epochTime": body_obj.get("epochTime", "")
+        }
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode() if e.fp else "Sin detalle"
         return {
-            "error": f"Error HTTP {e.code} al contactar Yappy",
+            "error": f"Error HTTP {e.code} validando comercio",
             "details": error_body,
-            "status": False
+            "success": False
         }
     except Exception as e:
         return {
             "error": f"Error conectando con Yappy: {str(e)}",
-            "status": False
+            "success": False
         }
 
-    # Step 2: Build redirect URL with signature
-    payment_date = str(int(time.time() * 1000))
 
-    signature = generate_signature(
-        config, order_id, total, subtotal, taxes, payment_date
-    )
+def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, discount, ipn_url):
+    """
+    Step 2: Create payment order using the token from step 1.
+    POST /payments/payment-wc
+    """
+    payment_date = int(time.time() * 1000)  # epoch in milliseconds
 
-    if not signature:
-        return {"error": "Error generando firma de seguridad", "status": False}
-
-    # Build query parameters
-    params = {
-        "merchantId": config["merchantId"],
-        "total": total,
-        "subtotal": subtotal,
-        "taxes": taxes,
+    request_body = json.dumps({
+        "merchantId": merchant_id,
+        "orderId": order_id,
+        "domain": domain,
         "paymentDate": payment_date,
-        "paymentMethod": "YAP",
-        "transactionType": "VEN",
-        "orderId": order_id,
-        "successUrl": config["successUrl"],
-        "failUrl": config["failUrl"],
-        "domain": config["domainUrl"],
         "aliasYappy": "",
-        "platform": "desarrollopropiophp",
-        "jwtToken": jwt_token,
+        "ipnUrl": ipn_url,
+        "discount": f"{discount:.2f}",
+        "taxes": f"{taxes:.2f}",
+        "subtotal": f"{subtotal:.2f}",
+        "total": f"{total:.2f}"
+    }).encode('utf-8')
+
+    headers = {
+        "Authorization": token,
+        "Content-Type": "application/json"
     }
 
-    query_string = urllib.parse.urlencode(params)
-    redirect_url = (
-        f"{YAPPY_REDIRECT_BASE}"
-        f"?sbx={config['sandbox']}"
-        f"&donation=no"
-        f"&checkoutUrl={urllib.parse.quote(domain, safe='')}"
-        f"&signature={signature}"
-        f"&{query_string}"
-    )
+    try:
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(
+            CREATE_ORDER_URL,
+            data=request_body,
+            headers=headers,
+            method='POST'
+        )
 
-    return {
-        "redirectUrl": redirect_url,
-        "orderId": order_id,
-        "status": True
-    }
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
+            result = json.loads(response.read().decode())
+
+        # Check response: {status: {code, description}, body: {transactionId, token, documentName}}
+        status_obj = result.get("status", {})
+        body_obj = result.get("body", {})
+
+        if not body_obj.get("transactionId"):
+            return {
+                "error": f"Error creando orden: {status_obj.get('description', 'Sin detalle')}",
+                "details": str(result),
+                "success": False
+            }
+
+        return {
+            "success": True,
+            "transactionId": body_obj["transactionId"],
+            "token": body_obj["token"],
+            "documentName": body_obj["documentName"]
+        }
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode() if e.fp else "Sin detalle"
+        return {
+            "error": f"Error HTTP {e.code} creando orden",
+            "details": error_body,
+            "success": False
+        }
+    except Exception as e:
+        return {
+            "error": f"Error creando orden: {str(e)}",
+            "success": False
+        }
 
 
 class handler(BaseHTTPRequestHandler):
@@ -199,31 +165,60 @@ class handler(BaseHTTPRequestHandler):
             total = float(body.get("total", 0))
             subtotal = float(body.get("subtotal", 0))
             taxes = float(body.get("taxes", 0))
+            discount = float(body.get("discount", 0))
 
-            # Get domain from headers
-            host = self.headers.get('x-forwarded-host', self.headers.get('Host', ''))
-            proto = self.headers.get('x-forwarded-proto', 'https')
-            domain = f"{proto}://{host}"
+            merchant_id = YAPPY_CONFIG["merchantId"]
+            domain = YAPPY_CONFIG["domain"]
+            ipn_url = YAPPY_CONFIG["ipnUrl"]
 
-            result = create_yappy_payment(order_id, total, subtotal, taxes, domain)
+            # Step 1: Validate merchant
+            validate_result = validate_merchant(merchant_id, domain)
 
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-            self.end_headers()
-            self.wfile.write(json.dumps(result).encode('utf-8'))
+            if not validate_result["success"]:
+                self._send_json(200, {
+                    "error": validate_result.get("error", "Error validando comercio"),
+                    "details": validate_result.get("details", ""),
+                    "status": False
+                })
+                return
+
+            auth_token = validate_result["token"]
+
+            # Step 2: Create order
+            order_result = create_order(
+                token=auth_token,
+                merchant_id=merchant_id,
+                order_id=order_id,
+                domain=domain,
+                total=total,
+                subtotal=subtotal,
+                taxes=taxes,
+                discount=discount,
+                ipn_url=ipn_url
+            )
+
+            if not order_result["success"]:
+                self._send_json(200, {
+                    "error": order_result.get("error", "Error creando orden"),
+                    "details": order_result.get("details", ""),
+                    "status": False
+                })
+                return
+
+            # Success - return data for the web component
+            self._send_json(200, {
+                "status": True,
+                "transactionId": order_result["transactionId"],
+                "token": order_result["token"],
+                "documentName": order_result["documentName"],
+                "orderId": order_id
+            })
 
         except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({
+            self._send_json(500, {
                 "error": f"Error procesando pago: {str(e)}",
                 "status": False
-            }).encode('utf-8'))
+            })
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -231,3 +226,12 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
+
+    def _send_json(self, status_code, data):
+        self.send_response(status_code)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode('utf-8'))
