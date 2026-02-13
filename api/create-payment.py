@@ -97,9 +97,12 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
     else:
         payment_date = int(time.time() * 1000)
 
+    # Clean orderId: Yappy requires alphanumeric only, max 15 chars
+    clean_order_id = order_id.replace("-", "").replace("_", "")[:15]
+
     order_body = {
         "merchantId": merchant_id,
-        "orderId": order_id,
+        "orderId": clean_order_id,
         "domain": domain,
         "paymentDate": payment_date,
         "aliasYappy": "",
