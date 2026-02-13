@@ -1861,12 +1861,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const items = category === 'all' ? MENU_ITEMS : MENU_ITEMS.filter(i => i.category === category);
         container.innerHTML = items.map(item => {
             const isAvailable = isProductAvailable(item.id);
-            const hasSizes = item.priceGrande !== null && item.priceGrande !== undefined && !item.onlyGrande;
+            // Has two sizes: priceGrande exists AND not onlyGrande
+            const hasSizes = item.priceGrande != null && !item.onlyGrande;
+            const displayPrice = item.price;
             return `
             <div class="pos-product-card ${!isAvailable ? 'disabled' : ''}" data-product-id="${item.id}" data-has-sizes="${hasSizes}">
                 ${item.image ? `<img src="${item.image}" class="pos-product-img" alt="${item.name}">` : `<span class="pos-product-emoji">${item.emoji}</span>`}
                 <span class="pos-product-name">${item.name}</span>
-                <span class="pos-product-price">${hasSizes ? `M $${item.price.toFixed(2)} / G $${item.priceGrande.toFixed(2)}` : `$${(item.onlyGrande ? item.priceGrande : item.price).toFixed(2)}`}</span>
+                <span class="pos-product-price">${hasSizes ? `M $${item.price.toFixed(2)} / G $${item.priceGrande.toFixed(2)}` : `$${displayPrice.toFixed(2)}`}</span>
                 ${hasSizes ? `
                 <div class="pos-size-picker hidden" data-product-id="${item.id}">
                     <button class="pos-size-btn" data-size="M" data-price="${item.price}">
@@ -1894,9 +1896,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     card.querySelector('.pos-size-picker').classList.remove('hidden');
                 } else {
                     const product = MENU_ITEMS.find(i => i.id === productId);
-                    const price = product.onlyGrande ? product.priceGrande : product.price;
-                    const size = product.onlyGrande ? 'G' : '';
-                    addToPOSCart(productId, size, price);
+                    addToPOSCart(productId, '', product.price);
                 }
             });
         });
