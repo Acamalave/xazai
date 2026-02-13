@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentUser = null;
     let cart = [];
     let orders = [];
-    let orderCounter = 1000;
+    let orderCounter = parseInt(localStorage.getItem('xazai_orderCounter') || '1000', 10);
     let expandedCardId = null;
 
     // DOM
@@ -337,6 +337,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     renderCategory('inicio');
     updateCartUI();
+
+    // Sync orderCounter with Firestore (get latest order number)
+    if (typeof db !== 'undefined') {
+        db.collection('orders').orderBy('createdAt', 'desc').limit(1).get().then(snap => {
+            if (!snap.empty) {
+                const lastOrder = snap.docs[0].data();
+                const num = lastOrder.number; // e.g. "XZ-1005"
+                if (num && num.startsWith('XZ-')) {
+                    const lastNum = parseInt(num.replace('XZ-', ''), 10);
+                    if (!isNaN(lastNum) && lastNum > orderCounter) {
+                        orderCounter = lastNum;
+                        localStorage.setItem('xazai_orderCounter', orderCounter);
+                        console.log('OrderCounter synced from Firestore:', orderCounter);
+                    }
+                }
+            }
+        }).catch(err => console.warn('Could not sync orderCounter:', err));
+    }
 
     // Restore persisted user session
     const savedUser = localStorage.getItem('xazai_user');
@@ -1739,6 +1757,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         orderCounter++;
+        localStorage.setItem('xazai_orderCounter', orderCounter);
         const orderId = `XZ-${orderCounter}`;
 
         // Show loading
@@ -1809,6 +1828,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         orderCounter++;
+        localStorage.setItem('xazai_orderCounter', orderCounter);
         const subtotal = cart.reduce((s, i) => s + i.total, 0);
         const deliveryFee = 4.50;
         const orderNum = `XZ-${orderCounter}`;
