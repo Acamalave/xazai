@@ -1750,12 +1750,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     let yappyCurrentOrderId = null;
 
+    let yappyComponentInitialized = false;
     function setupYappyWebComponent() {
+        if (yappyComponentInitialized) return;
         const btnYappy = document.querySelector("btn-yappy");
         if (!btnYappy) {
             console.warn('Yappy web component not found');
             return;
         }
+        yappyComponentInitialized = true;
 
         // Check if Yappy channel is online
         btnYappy.addEventListener('isYappyOnline', (event) => {
@@ -1806,7 +1809,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 const result = await response.json();
                 console.log('Yappy create-payment response:', result);
 
-                if (result.status && result.transactionId && result.token && result.documentName) {
+                if (result.details) console.log('Yappy error details:', result.details);
+
+            if (result.status && result.transactionId && result.token && result.documentName) {
                     // Save pending order
                     localStorage.setItem('xazai_pending_order', JSON.stringify({
                         orderId, cart: [...cart], deliveryAddress, total, subtotal

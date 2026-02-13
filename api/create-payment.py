@@ -53,6 +53,8 @@ def validate_merchant(merchant_id, domain):
         with urllib.request.urlopen(req, context=ctx, timeout=15) as response:
             result = json.loads(response.read().decode())
 
+        print(f"VALIDATE MERCHANT RESPONSE: {json.dumps(result)}")
+
         # Check response structure: {status: {code, description}, body: {epochTime, token}}
         status_obj = result.get("status", {})
         body_obj = result.get("body", {})
@@ -84,14 +86,18 @@ def validate_merchant(merchant_id, domain):
         }
 
 
-def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, discount, ipn_url):
+def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, discount, ipn_url, epoch_time=None):
     """
     Step 2: Create payment order using the token from step 1.
     POST /payments/payment-wc
     """
-    payment_date = int(time.time() * 1000)  # epoch in milliseconds
+    # Use epochTime from validate response if available, otherwise generate
+    if epoch_time:
+        payment_date = epoch_time
+    else:
+        payment_date = int(time.time() * 1000)
 
-    request_body = json.dumps({
+    order_body = {
         "merchantId": merchant_id,
         "orderId": order_id,
         "domain": domain,
@@ -102,7 +108,12 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
         "taxes": f"{taxes:.2f}",
         "subtotal": f"{subtotal:.2f}",
         "total": f"{total:.2f}"
-    }).encode('utf-8')
+    }
+
+    # Log for debugging
+    print(f"CREATE ORDER REQUEST: {json.dumps(order_body)}")
+
+    request_body = json.dumps(order_body).encode('utf-8')
 
     headers = {
         "Authorization": token,
@@ -141,6 +152,7 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
 
     except urllib.error.HTTPError as e:
         error_body = e.read().decode() if e.fp else "Sin detalle"
+        print(f"CREATE ORDER HTTP ERROR {e.code}: {error_body}")
         return {
             "error": f"Error HTTP {e.code} creando orden",
             "details": error_body,
@@ -183,6 +195,7 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             auth_token = validate_result["token"]
+            epoch_time = validate_result.get("epochTime", None)
 
             # Step 2: Create order
             order_result = create_order(
@@ -194,7 +207,8 @@ class handler(BaseHTTPRequestHandler):
                 subtotal=subtotal,
                 taxes=taxes,
                 discount=discount,
-                ipn_url=ipn_url
+                ipn_url=ipn_url,
+                epoch_time=epoch_time
             )
 
             if not order_result["success"]:
