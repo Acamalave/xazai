@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XAZAI - Açai Bar & Smoothies</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <div class="logo-small">
+                <img src="images/logo-xazai.png" alt="XAZAI - Açai Bar & Smoothies" class="logo-img-nav">
+            </div>
+        </div>
+        <div class="nav-center">
+            <div class="category-tabs" id="category-tabs">
+                <button class="tab active" data-category="inicio"><i class="fas fa-home"></i> Inicio</button>
+                <button class="tab" data-category="bowls"><i class="fas fa-bowl-food"></i> Bowls</button>
+                <button class="tab" data-category="smoothies"><i class="fas fa-blender"></i> Smoothies</button>
+                <button class="tab" data-category="jugos"><i class="fas fa-glass-water"></i> Jugos</button>
+                <button class="tab" data-category="shots"><i class="fas fa-fire-flame-curved"></i> Shots</button>
+                <button class="tab" data-category="cafe"><i class="fas fa-mug-hot"></i> Café</button>
+                <button class="tab" data-category="bebidas"><i class="fas fa-bottle-water"></i> Bebidas</button>
+                <button class="tab tab-highlight" data-category="arma-tu-bowl"><i class="fas fa-wand-magic-sparkles"></i> Arma tu Bowl</button>
+            </div>
+        </div>
+        <div class="nav-right">
+            <div class="store-status" id="store-status">
+                <span class="status-dot"></span>
+                <span class="status-text" id="status-text">Cargando...</span>
+            </div>
+            <button class="cart-btn" id="cart-btn">
+                <i class="fas fa-shopping-cart"></i>
+                <span class="cart-count" id="cart-count">0</span>
+            </button>
+            <div class="user-menu">
+                <button class="user-btn" id="user-btn">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="user-name">Mi Cuenta</span>
+                </button>
+                <div class="user-dropdown hidden" id="user-dropdown">
+                    <button id="admin-panel-btn" class="dropdown-item hidden">
+                        <i class="fas fa-cog"></i> Panel Admin
+                    </button>
+                    <button id="login-trigger-btn" class="dropdown-item">
+                        <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
+                    </button>
+                    <button id="logout-btn" class="dropdown-item hidden">
+                        <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MENU SECTION -->
+    <section class="menu-section" id="menu-section">
+        <div class="products-list" id="products-grid"></div>
+    </section>
+
+    <!-- BUILD YOUR BOWL SECTION -->
+    <section class="build-bowl-section hidden" id="build-bowl-section">
+        <div class="section-header">
+            <h2>Arma tu Bowl</h2>
+            <p>Personaliza tu bowl perfecto paso a paso</p>
+        </div>
+        <div class="build-steps">
+            <div class="build-step">
+                <h3><span class="step-number">1</span> Elige tu base</h3>
+                <div class="build-options" id="base-options"></div>
+            </div>
+            <div class="build-step">
+                <h3><span class="step-number">2</span> Agrega textura</h3>
+                <div class="build-options" id="protein-options"></div>
+            </div>
+            <div class="build-step">
+                <h3><span class="step-number">3</span> Elige tus toppings (hasta 4)</h3>
+                <div class="build-options" id="topping-options"></div>
+            </div>
+            <div class="build-step">
+                <h3><span class="step-number">4</span> Elige tu drizzle</h3>
+                <div class="build-options" id="dressing-options"></div>
+            </div>
+            <div class="build-summary">
+                <h3>Tu Bowl Personalizado</h3>
+                <div id="build-summary-content">
+                    <p class="empty-build">Selecciona tus ingredientes para comenzar</p>
+                </div>
+                <div class="build-total">
+                    <span>Total:</span>
+                    <span id="build-total-price">$0.00</span>
+                </div>
+                <button class="btn-add-build" id="btn-add-build" disabled>
+                    <i class="fas fa-cart-plus"></i> Agregar al Carrito
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- FLOATING CHECKOUT BAR -->
+    <div class="floating-checkout hidden" id="floating-checkout">
+        <div class="floating-checkout-info">
+            <span class="floating-items" id="floating-items">0 items</span>
+            <span class="floating-total" id="floating-total">$0.00</span>
+        </div>
+        <button class="floating-checkout-btn" id="floating-checkout-btn">
+            <span>Finalizar Pedido</span>
+            <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+
+    <!-- CART SIDEBAR -->
+    <div class="cart-overlay hidden" id="cart-overlay"></div>
+    <div class="cart-sidebar hidden" id="cart-sidebar">
+        <div class="cart-header">
+            <h3><i class="fas fa-shopping-cart"></i> Tu Carrito</h3>
+            <button class="cart-close" id="cart-close"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="cart-items" id="cart-items">
+            <div class="cart-empty">
+                <i class="fas fa-shopping-basket"></i>
+                <p>Tu carrito está vacío</p>
+            </div>
+        </div>
+        <div class="cart-footer" id="cart-footer">
+            <div class="cart-subtotal">
+                <span>Subtotal</span>
+                <span id="cart-subtotal">$0.00</span>
+            </div>
+            <div class="cart-total">
+                <span>Total</span>
+                <span id="cart-total">$0.00</span>
+            </div>
+            <button class="btn-checkout" id="btn-checkout">
+                <i class="fas fa-credit-card"></i> Finalizar Pedido
+            </button>
+        </div>
+    </div>
+
+    <!-- LOGIN MODAL (for checkout) -->
+    <div class="modal-overlay hidden" id="login-modal">
+        <div class="login-modal-content">
+            <button class="modal-close" id="login-modal-close"><i class="fas fa-times"></i></button>
+            <div class="login-logo">
+                <img src="images/logo-xazai.png" alt="XAZAI" class="logo-img-modal">
+            </div>
+            <h2>Ingresa tu número para ordenar</h2>
+            <p class="login-subtitle">O continúa como invitado</p>
+            <form id="login-form">
+                <div class="phone-input-group">
+                    <div class="country-select-wrapper">
+                        <select id="country-code" class="country-code-select">
+                            <option value="+507" selected>🇵🇦 +507</option>
+                            <option value="+1">🇺🇸 +1</option>
+                            <option value="+52">🇲🇽 +52</option>
+                            <option value="+57">🇨🇴 +57</option>
+                            <option value="+506">🇨🇷 +506</option>
+                            <option value="+503">🇸🇻 +503</option>
+                            <option value="+502">🇬🇹 +502</option>
+                            <option value="+504">🇭🇳 +504</option>
+                            <option value="+505">🇳🇮 +505</option>
+                            <option value="+593">🇪🇨 +593</option>
+                            <option value="+51">🇵🇪 +51</option>
+                            <option value="+56">🇨🇱 +56</option>
+                            <option value="+54">🇦🇷 +54</option>
+                            <option value="+55">🇧🇷 +55</option>
+                            <option value="+58">🇻🇪 +58</option>
+                            <option value="+34">🇪🇸 +34</option>
+                        </select>
+                    </div>
+                    <div class="phone-number-wrapper">
+                        <i class="fas fa-phone"></i>
+                        <input type="tel" id="login-phone" placeholder="Número de teléfono" inputmode="numeric" pattern="[0-9]*" autocomplete="tel">
+                    </div>
+                </div>
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="login-name" placeholder="Tu nombre (opcional)">
+                </div>
+                <button type="submit" class="btn-login"><i class="fas fa-paper-plane"></i> Continuar</button>
+                <button type="button" class="btn-guest" id="btn-guest">Continuar como invitado</button>
+            </form>
+            <p id="login-error" class="login-error"></p>
+        </div>
+    </div>
+
+    <!-- ADMIN PANEL -->
+    <div class="admin-overlay hidden" id="admin-overlay">
+        <div class="admin-panel">
+            <div class="admin-header">
+                <h2><i class="fas fa-cog"></i> Panel de Administración</h2>
+                <button class="admin-close" id="admin-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="admin-tabs">
+                <button class="admin-tab active" data-admin-tab="orders"><i class="fas fa-receipt"></i> Pedidos</button>
+                <button class="admin-tab" data-admin-tab="products"><i class="fas fa-utensils"></i> Productos</button>
+            </div>
+            <div class="admin-content">
+                <div class="admin-orders" id="admin-orders">
+                    <div class="orders-filter">
+                        <button class="filter-btn active" data-status="all">Todos</button>
+                        <button class="filter-btn" data-status="pendiente">Pendientes</button>
+                        <button class="filter-btn" data-status="preparando">Preparando</button>
+                        <button class="filter-btn" data-status="listo">Listos</button>
+                        <button class="filter-btn" data-status="entregado">Entregados</button>
+                    </div>
+                    <div class="orders-list" id="orders-list">
+                        <p class="no-orders">No hay pedidos aún</p>
+                    </div>
+                </div>
+                <div class="admin-products hidden" id="admin-products">
+                    <p class="admin-note">Gestión de productos disponible próximamente</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ORDER CONFIRMATION -->
+    <div class="confirmation-overlay hidden" id="confirmation-overlay">
+        <div class="confirmation-modal">
+            <div class="confirmation-icon"><i class="fas fa-check-circle"></i></div>
+            <h2>¡Pedido Realizado!</h2>
+            <p>Tu pedido <strong id="order-number"></strong> ha sido recibido</p>
+            <p class="confirmation-detail">Te notificaremos cuando esté listo</p>
+            <button class="btn-confirm-ok" id="btn-confirm-ok">Aceptar</button>
+        </div>
+    </div>
+
+    <!-- PAYMENT MODAL (Yappy) -->
+    <div class="modal-overlay hidden" id="payment-modal">
+        <div class="payment-modal-content">
+            <button class="modal-close" id="payment-modal-close"><i class="fas fa-times"></i></button>
+
+            <div class="payment-header">
+                <div class="payment-logo">
+                    <img src="images/logo-xazai.png" alt="XAZAI" class="logo-img-payment">
+                </div>
+                <h2>Resumen de Pedido</h2>
+            </div>
+
+            <div class="payment-summary">
+                <div class="payment-order-detail" id="payment-order-detail">
+                    <!-- Cart items injected by JS -->
+                </div>
+                <div class="payment-line payment-line-subtotal">
+                    <span>Subtotal</span>
+                    <span id="payment-subtotal">$0.00</span>
+                </div>
+                <div class="payment-line">
+                    <span><i class="fas fa-motorcycle"></i> Envío</span>
+                    <span id="payment-delivery">$4.50</span>
+                </div>
+                <div class="payment-line payment-line-tip">
+                    <span><i class="fas fa-heart"></i> Propina</span>
+                    <span id="payment-tip-amount">$0.00</span>
+                </div>
+                <div class="payment-line payment-line-total">
+                    <span>Total a pagar</span>
+                    <span id="payment-total">$0.00</span>
+                </div>
+            </div>
+
+            <div class="tip-section">
+                <h4><i class="fas fa-heart"></i> ¿Deseas dejar propina?</h4>
+                <div class="tip-options" id="tip-options">
+                    <button class="tip-btn" data-tip="0.90">$0.90</button>
+                    <button class="tip-btn" data-tip="1.50">$1.50</button>
+                    <button class="tip-btn" data-tip="3.00">$3.00</button>
+                    <button class="tip-btn tip-btn-custom" data-tip="custom"><i class="fas fa-edit"></i> Otra</button>
+                </div>
+                <div class="tip-custom-input hidden" id="tip-custom-input">
+                    <span class="tip-currency">$</span>
+                    <input type="number" id="tip-custom-value" placeholder="0.00" min="0" max="100" step="0.50">
+                    <button class="tip-custom-apply" id="tip-custom-apply">OK</button>
+                </div>
+            </div>
+
+            <div class="scheduled-banner hidden" id="scheduled-banner">
+                <i class="fas fa-clock"></i>
+                <span id="scheduled-banner-text">Pedido agendado</span>
+            </div>
+
+            <div class="payment-address">
+                <h4><i class="fas fa-map-marker-alt"></i> Dirección de entrega</h4>
+                <div class="map-container" id="map-container"></div>
+                <textarea class="address-input" id="delivery-address" placeholder="Detalles adicionales: edificio, apto, referencias..." rows="2" maxlength="300"></textarea>
+            </div>
+
+            <div class="payment-methods">
+                <h3>Selecciona tu método de pago</h3>
+
+                <button class="btn-pay-yappy" id="btn-pay-yappy">
+                    <div class="pay-btn-content">
+                        <div class="pay-icon-yappy">
+                            <i class="fas fa-mobile-alt"></i>
+                            <span>Yappy</span>
+                        </div>
+                        <span class="pay-label">Pagar con Yappy</span>
+                    </div>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+
+                <div class="yappy-loading hidden" id="yappy-loading">
+                    <div class="spinner"></div>
+                    <span>Conectando con Yappy...</span>
+                </div>
+
+                <div class="yappy-error hidden" id="yappy-error">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="yappy-error-msg">Error al conectar</span>
+                </div>
+
+                <div class="payment-divider">
+                    <span>o</span>
+                </div>
+
+                <button class="btn-pay-cash" id="btn-pay-cash">
+                    <div class="pay-btn-content">
+                        <i class="fas fa-money-bill-wave"></i>
+                        <span>Pagar en el local</span>
+                    </div>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+
+            <p class="payment-secure"><i class="fas fa-shield-alt"></i> Pago seguro con encriptación SSL</p>
+        </div>
+    </div>
+
+    <!-- SCHEDULE ORDER MODAL (when store is closed) -->
+    <div class="modal-overlay hidden" id="schedule-modal">
+        <div class="schedule-modal-content">
+            <button class="modal-close" id="schedule-modal-close"><i class="fas fa-times"></i></button>
+            <div class="schedule-icon"><i class="fas fa-clock"></i></div>
+            <h2>Estamos cerrados ahora</h2>
+            <p class="schedule-subtitle" id="schedule-subtitle">Pero puedes agendar tu pedido para cuando abramos</p>
+            <div class="schedule-options" id="schedule-options">
+                <!-- Time slots injected by JS -->
+            </div>
+            <button class="btn-schedule-confirm" id="btn-schedule-confirm" disabled>
+                <i class="fas fa-calendar-check"></i> Confirmar Horario y Continuar
+            </button>
+            <button class="btn-schedule-cancel" id="btn-schedule-cancel">Cancelar</button>
+        </div>
+    </div>
+
+    <!-- ADMIN SECRET LOGIN MODAL -->
+    <div class="modal-overlay hidden" id="admin-login-modal">
+        <div class="login-modal-content admin-secret-login">
+            <button class="modal-close" id="admin-login-close"><i class="fas fa-times"></i></button>
+            <div class="login-logo">
+                <i class="fas fa-shield-alt" style="font-size: 40px; color: var(--accent);"></i>
+            </div>
+            <h2>Acceso Administrador</h2>
+            <p class="login-subtitle">Ingresa las credenciales de admin</p>
+            <form id="admin-login-form">
+                <div class="phone-input-group">
+                    <div class="country-select-wrapper">
+                        <select id="admin-country-code" class="country-code-select">
+                            <option value="+507" selected>🇵🇦 +507</option>
+                            <option value="+1">🇺🇸 +1</option>
+                            <option value="+52">🇲🇽 +52</option>
+                            <option value="+57">🇨🇴 +57</option>
+                        </select>
+                    </div>
+                    <div class="phone-number-wrapper">
+                        <i class="fas fa-phone"></i>
+                        <input type="tel" id="admin-login-phone" placeholder="Teléfono admin" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+                    </div>
+                </div>
+                <button type="submit" class="btn-login"><i class="fas fa-lock"></i> Ingresar como Admin</button>
+            </form>
+            <p id="admin-login-error" class="login-error"></p>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

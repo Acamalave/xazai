@@ -1,0 +1,24 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large files
+*.pdf
+REcetas*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# Server (backend - not needed for Vercel static deploy)
+server.py
+
+# Node (if added later)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
