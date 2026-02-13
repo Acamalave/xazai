@@ -99,6 +99,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let customerOrdersUnsubscribe = null;
     let customerActiveOrders = [];
     let customerPastOrders = [];
+    let _loadingHistory = false;
 
     // DOM - Mis Pedidos
     const misPedidosSection = $('mis-pedidos-section');
@@ -477,7 +478,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // CUSTOMER ORDER HISTORY & "VOLVER A COMPRAR"
     // ========================================
-    let _loadingHistory = false;
     async function loadCustomerOrderHistory(phone) {
         if (!phone || typeof db === 'undefined' || _loadingHistory) return;
         _loadingHistory = true;
