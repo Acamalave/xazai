@@ -86,7 +86,7 @@ def validate_merchant(merchant_id, domain):
         }
 
 
-def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, discount, ipn_url, epoch_time=None):
+def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, discount, ipn_url, phone="", epoch_time=None):
     """
     Step 2: Create payment order using the token from step 1.
     POST /payments/payment-wc
@@ -104,14 +104,15 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
         "merchantId": merchant_id,
         "orderId": clean_order_id,
         "domain": domain,
-        "paymentDate": str(payment_date),
-        "aliasYappy": "",
+        "paymentDate": payment_date,
+        "aliasYappy": phone,
         "ipnUrl": ipn_url,
         "discount": f"{discount:.2f}",
         "taxes": f"{taxes:.2f}",
         "subtotal": f"{subtotal:.2f}",
         "total": f"{total:.2f}"
     }
+
 
     # Log for debugging
     print(f"CREATE ORDER REQUEST: {json.dumps(order_body)}")
@@ -182,6 +183,7 @@ class handler(BaseHTTPRequestHandler):
             subtotal = float(body.get("subtotal", 0))
             taxes = float(body.get("taxes", 0))
             discount = float(body.get("discount", 0))
+            phone = body.get("phone", "")
 
             merchant_id = YAPPY_CONFIG["merchantId"]
             domain = YAPPY_CONFIG["domain"]
@@ -213,6 +215,7 @@ class handler(BaseHTTPRequestHandler):
                 taxes=taxes,
                 discount=discount,
                 ipn_url=ipn_url,
+                phone=phone,
                 epoch_time=epoch_time
             )
 

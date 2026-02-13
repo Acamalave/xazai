@@ -1778,6 +1778,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
+            // Get Yappy phone number (required by API)
+            const yappyPhone = (currentUser && currentUser.phone) ? currentUser.phone.replace(/\D/g, '') : '';
+            if (!yappyPhone || yappyPhone.length < 7) {
+                showToast('Ingresa tu número de teléfono para pagar con Yappy', 'error');
+                return;
+            }
+
             // Prepare order data
             const subtotal = cart.reduce((s, i) => s + i.total, 0);
             const deliveryFee = 4.50;
@@ -1796,6 +1803,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Call our backend which makes the 2 Yappy API calls
                 // Yappy validates: subtotal + taxes - discount = total
                 // So we send subtotal = total (delivery fee + tip included)
+                // aliasYappy (phone) is required by Yappy V2 API
                 const response = await fetch('/api/create-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1804,7 +1812,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         total: total,
                         subtotal: total,
                         taxes: 0,
-                        discount: 0
+                        discount: 0,
+                        phone: yappyPhone
                     })
                 });
 
