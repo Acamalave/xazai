@@ -1779,7 +1779,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Get Yappy phone number (required by API)
-            const yappyPhone = (currentUser && currentUser.phone) ? currentUser.phone.replace(/\D/g, '') : '';
+            // Strip non-digits and remove Panama country code (+507 or 507)
+            let yappyPhone = (currentUser && currentUser.phone) ? currentUser.phone.replace(/\D/g, '') : '';
+            if (yappyPhone.startsWith('507') && yappyPhone.length > 8) {
+                yappyPhone = yappyPhone.substring(3);
+            }
             if (!yappyPhone || yappyPhone.length < 7) {
                 showToast('Ingresa tu número de teléfono para pagar con Yappy', 'error');
                 return;
