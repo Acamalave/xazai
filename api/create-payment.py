@@ -92,10 +92,11 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
     POST /payments/payment-wc
     """
     # Use epochTime from validate response if available, otherwise generate
+    # Yappy expects epoch time — use value from validate response directly
     if epoch_time:
         payment_date = epoch_time
     else:
-        payment_date = int(time.time() * 1000)
+        payment_date = int(time.time())
 
     # Clean orderId: Yappy requires alphanumeric only, max 15 chars
     clean_order_id = order_id.replace("-", "").replace("_", "")[:15]
@@ -105,7 +106,6 @@ def create_order(token, merchant_id, order_id, domain, total, subtotal, taxes, d
         "orderId": clean_order_id,
         "domain": domain,
         "paymentDate": payment_date,
-        "aliasYappy": "",
         "ipnUrl": ipn_url,
         "discount": f"{discount:.2f}",
         "taxes": f"{taxes:.2f}",

@@ -1794,13 +1794,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
             try {
                 // Call our backend which makes the 2 Yappy API calls
+                // Yappy validates: subtotal + taxes - discount = total
+                // So we send subtotal = total (delivery fee + tip included)
                 const response = await fetch('/api/create-payment', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         orderId: orderId,
                         total: total,
-                        subtotal: subtotal,
+                        subtotal: total,
                         taxes: 0,
                         discount: 0
                     })
