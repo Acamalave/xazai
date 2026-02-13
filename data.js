@@ -270,7 +270,7 @@ const MENU_ITEMS = [
         category: 'smoothies',
         tagline: 'El Proteico',
         description: 'Para el cliente del Gym. Evolución funcional del batido de banana con proteína y mantequilla de maní. Paredes con PB.',
-        ingredients: ['Banana', 'Proteína Sacha', 'Mantequilla de Maní', 'Leche de Almendras'],
+        ingredients: ['Banana', 'Proteína Sascha', 'Mantequilla de Maní', 'Leche de Almendras'],
         toppings: ['Mantequilla de Maní en paredes'],
         price: 7.00,
         priceGrande: null,
@@ -451,7 +451,7 @@ const EXTRA_TOPPINGS = [
     { id: 't9', name: 'Nutella', price: 1.25, emoji: '🍫' },
     { id: 't10', name: 'Granola Xazai', price: 1.50, emoji: '🥣' },
     { id: 't11', name: 'Fresas Frescas', price: 1.75, emoji: '🍓' },
-    { id: 't12', name: 'Proteína (Sacha/Whey)', price: 2.50, emoji: '💪' },
+    { id: 't12', name: 'Proteína (Sascha/Whey)', price: 2.50, emoji: '💪' },
     { id: 't13', name: 'Bola Extra de Açaí', price: 3.00, emoji: '🟣' }
 ];
 
@@ -468,7 +468,7 @@ const BUILD_OPTIONS = {
     proteins: [
         { id: 'p1', name: 'Banana', price: 1.00, emoji: '🍌' },
         { id: 'p2', name: 'Piña', price: 1.00, emoji: '🍍' },
-        { id: 'p3', name: 'Proteína Sacha', price: 2.50, emoji: '💪' },
+        { id: 'p3', name: 'Proteína Sascha', price: 2.50, emoji: '💪' },
         { id: 'p4', name: 'Mantequilla de Maní', price: 1.75, emoji: '🥜' }
     ],
     toppings: [
@@ -489,3 +489,45 @@ const BUILD_OPTIONS = {
         { id: 'd5', name: 'Sin Drizzle', price: 0.00, emoji: '✨' }
     ]
 };
+
+// Inventory ingredients for stock tracking
+const INVENTORY_INGREDIENTS = [
+    // Frutas y bases
+    { id: 'ing-acai', name: 'Pulpa de Açaí', category: 'Bases', emoji: '💜', unit: 'packs' },
+    { id: 'ing-pitaya', name: 'Pitaya Congelada', category: 'Bases', emoji: '🩷', unit: 'packs' },
+    { id: 'ing-banana', name: 'Banana', category: 'Frutas', emoji: '🍌', unit: 'unidades' },
+    { id: 'ing-fresa', name: 'Fresas', category: 'Frutas', emoji: '🍓', unit: 'lbs' },
+    { id: 'ing-arandanos', name: 'Arándanos', category: 'Frutas', emoji: '🫐', unit: 'lbs' },
+    { id: 'ing-mango', name: 'Mango', category: 'Frutas', emoji: '🥭', unit: 'lbs' },
+    { id: 'ing-pina', name: 'Piña', category: 'Frutas', emoji: '🍍', unit: 'unidades' },
+    { id: 'ing-frambuesa', name: 'Frambuesas', category: 'Frutas', emoji: '🍇', unit: 'lbs' },
+    // Toppings
+    { id: 'ing-granola', name: 'Granola Xazai', category: 'Toppings', emoji: '🥣', unit: 'lbs' },
+    { id: 'ing-coco', name: 'Coco Rallado', category: 'Toppings', emoji: '🥥', unit: 'lbs' },
+    { id: 'ing-choco', name: 'Gotas de Chocolate', category: 'Toppings', emoji: '🍫', unit: 'lbs' },
+    { id: 'ing-escarcha', name: 'Escarcha Comestible', category: 'Toppings', emoji: '✨', unit: 'packs' },
+    { id: 'ing-petazeta', name: 'Peta Zetas', category: 'Toppings', emoji: '💥', unit: 'packs' },
+    // Salsas y cremas
+    { id: 'ing-nutella', name: 'Nutella', category: 'Salsas', emoji: '🍫', unit: 'jars' },
+    { id: 'ing-miel', name: 'Miel de Abeja', category: 'Salsas', emoji: '🍯', unit: 'botellas' },
+    { id: 'ing-lechec', name: 'Leche Condensada', category: 'Salsas', emoji: '🥛', unit: 'latas' },
+    { id: 'ing-pb', name: 'Mantequilla de Maní', category: 'Salsas', emoji: '🥜', unit: 'jars' },
+    // Proteína y suplementos
+    { id: 'ing-proteina', name: 'Proteína Sascha', category: 'Suplementos', emoji: '💪', unit: 'scoops' },
+    { id: 'ing-curcuma', name: 'Cúrcuma', category: 'Suplementos', emoji: '🟡', unit: 'grams' },
+    { id: 'ing-jengibre', name: 'Jengibre', category: 'Suplementos', emoji: '🫚', unit: 'unidades' },
+    // Leches
+    { id: 'ing-leche', name: 'Leche Entera', category: 'Leches', emoji: '🥛', unit: 'litros' },
+    { id: 'ing-leche-alm', name: 'Leche de Almendras', category: 'Leches', emoji: '🌰', unit: 'litros' },
+    { id: 'ing-agua-coco', name: 'Agua de Coco', category: 'Leches', emoji: '🥥', unit: 'litros' },
+    // Bebidas (stock por unidad)
+    { id: 'ing-coca', name: 'Coca Cola', category: 'Bebidas', emoji: '🥤', unit: 'unidades' },
+    { id: 'ing-coca-zero', name: 'Coca Cola Zero', category: 'Bebidas', emoji: '🥤', unit: 'unidades' },
+    { id: 'ing-canada', name: 'Canada Dry', category: 'Bebidas', emoji: '🥤', unit: 'unidades' },
+    { id: 'ing-agua', name: 'Agua', category: 'Bebidas', emoji: '💧', unit: 'unidades' },
+    // Café
+    { id: 'ing-cafe', name: 'Café en Grano', category: 'Café', emoji: '☕', unit: 'lbs' },
+    { id: 'ing-vasos', name: 'Vasos', category: 'Insumos', emoji: '🥤', unit: 'unidades' },
+    { id: 'ing-tapas', name: 'Tapas de Vaso', category: 'Insumos', emoji: '🔵', unit: 'unidades' },
+    { id: 'ing-cucharas', name: 'Cucharas Bowl', category: 'Insumos', emoji: '🥄', unit: 'unidades' }
+];

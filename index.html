@@ -267,6 +267,19 @@
                         </div>
                         <div class="pos-invoice-totals">
                             <div class="pos-total-line"><span>Subtotal</span><span id="pos-subtotal">$0.00</span></div>
+                            <div class="pos-tip-section">
+                                <span class="pos-tip-label">Propina</span>
+                                <div class="pos-tip-options">
+                                    <button class="pos-tip-btn active" data-tip="0">Sin</button>
+                                    <button class="pos-tip-btn" data-tip="1">$1</button>
+                                    <button class="pos-tip-btn" data-tip="2">$2</button>
+                                    <button class="pos-tip-btn" data-tip="5">$5</button>
+                                    <button class="pos-tip-btn" data-tip="custom">Otro</button>
+                                </div>
+                                <div class="pos-tip-custom hidden" id="pos-tip-custom">
+                                    <div class="pos-cash-input-wrap"><span>$</span><input type="number" id="pos-tip-amount" placeholder="0.00" min="0" step="0.01"></div>
+                                </div>
+                            </div>
                             <div class="pos-total-line pos-total-main"><span>Total</span><span id="pos-total">$0.00</span></div>
                         </div>
                         <div class="pos-payment-method">
@@ -314,9 +327,18 @@
             <section id="admin-sec-inventory" class="admin-section hidden">
                 <div class="admin-section-header">
                     <h2><i class="fas fa-boxes-stacked"></i> Control de Inventario</h2>
-                    <p class="admin-section-subtitle">Activa o desactiva productos del menú en tiempo real</p>
+                    <p class="admin-section-subtitle">Controla productos, ingredientes y cantidades</p>
                 </div>
-                <div class="inventory-list" id="inventory-list"></div>
+                <div class="inv-tabs">
+                    <button class="inv-tab-btn active" data-inv-tab="productos">Productos</button>
+                    <button class="inv-tab-btn" data-inv-tab="ingredientes">Ingredientes</button>
+                </div>
+                <div id="inv-tab-productos" class="inv-tab-content">
+                    <div class="inventory-list" id="inventory-list"></div>
+                </div>
+                <div id="inv-tab-ingredientes" class="inv-tab-content hidden">
+                    <div class="inventory-list" id="ingredients-list"></div>
+                </div>
             </section>
 
             <!-- GASTOS Section -->
@@ -375,15 +397,31 @@
                     <h2><i class="fas fa-chart-line"></i> Dashboard Financiero</h2>
                     <p class="admin-section-subtitle">Vista resumida de ventas, gastos y ganancias</p>
                 </div>
-                <div class="dash-month-selector">
-                    <button id="dash-prev-month"><i class="fas fa-chevron-left"></i></button>
-                    <span id="dash-current-month">Febrero 2026</span>
-                    <button id="dash-next-month"><i class="fas fa-chevron-right"></i></button>
+                <div class="dash-date-controls">
+                    <div class="dash-range-tabs">
+                        <button class="dash-range-btn active" data-range="day">Hoy</button>
+                        <button class="dash-range-btn" data-range="week">Semana</button>
+                        <button class="dash-range-btn" data-range="month">Mes</button>
+                        <button class="dash-range-btn" data-range="custom">Rango</button>
+                    </div>
+                    <div class="dash-date-inputs">
+                        <div class="dash-nav-arrows">
+                            <button id="dash-prev"><i class="fas fa-chevron-left"></i></button>
+                            <span id="dash-current-label">Hoy</span>
+                            <button id="dash-next"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                        <div class="dash-custom-range hidden" id="dash-custom-range">
+                            <input type="date" id="dash-date-from">
+                            <span>—</span>
+                            <input type="date" id="dash-date-to">
+                            <button class="dash-apply-btn" id="dash-apply-range"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
                 </div>
                 <div class="dash-summary-grid" id="dash-summary"></div>
                 <div class="dash-grid-2col">
                     <div class="dash-panel" id="dash-payments">
-                        <h3><i class="fas fa-wallet"></i> Desglose por Método</h3>
+                        <h3><i class="fas fa-wallet"></i> Desglose por Método (Cierre)</h3>
                         <div id="dash-payments-content"></div>
                     </div>
                     <div class="dash-panel" id="dash-top-products">

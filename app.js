@@ -620,6 +620,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const hasIngredients = product.ingredients && product.ingredients.length > 0;
         const isOnlyGrande = product.onlyGrande;
         const showToppingsExtra = ['bowls'].includes(product.category);
+        const isSmoothie = product.category === 'smoothies';
 
         // Size section: only show if not onlyGrande
         let sizeSection = '';
@@ -657,6 +658,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>`;
         }
 
+        // Smoothie options: protein + milk
+        let smoothieOptionsSection = '';
+        if (isSmoothie) {
+            // Check if product uses leche in ingredients
+            const usesLecheAlm = (product.ingredients || []).some(i => i.toLowerCase().includes('leche de almendras') || i.toLowerCase().includes('agua de coco'));
+            const usesLeche = (product.ingredients || []).some(i => i.toLowerCase().includes('leche') && !i.toLowerCase().includes('almendras'));
+
+            smoothieOptionsSection = `
+                <div class="expand-section">
+                    <h4><i class="fas fa-blender"></i> Personaliza tu Smoothie</h4>
+                    <div style="margin-bottom:10px">
+                        <span style="font-size:13px;color:var(--text-light);display:block;margin-bottom:6px">Agregar Proteína (+$2.50)</span>
+                        <div class="expand-options-row" id="smoothie-protein-opts">
+                            <label class="option-pill active" data-protein="none"><input type="radio" name="sm-protein" value="none" checked>Sin proteína <span class="option-pill-price">$0</span></label>
+                            <label class="option-pill" data-protein="sascha"><input type="radio" name="sm-protein" value="sascha">💪 Proteína Sascha <span class="option-pill-price">+$2.50</span></label>
+                        </div>
+                    </div>
+                    ${usesLeche || usesLecheAlm ? `
+                    <div>
+                        <span style="font-size:13px;color:var(--text-light);display:block;margin-bottom:6px">Tipo de Leche</span>
+                        <div class="expand-options-row" id="smoothie-milk-opts">
+                            <label class="option-pill ${usesLecheAlm ? 'active' : ''}" data-milk="almendras"><input type="radio" name="sm-milk" value="almendras" ${usesLecheAlm ? 'checked' : ''}>🌰 Leche de Almendras</label>
+                            <label class="option-pill ${usesLeche ? 'active' : ''}" data-milk="entera"><input type="radio" name="sm-milk" value="entera" ${usesLeche ? 'checked' : ''}>🥛 Leche Entera</label>
+                        </div>
+                    </div>` : ''}
+                </div>`;
+        }
+
         return `
             <div class="expand-inner">
                 ${hasIngredients ? `
@@ -665,6 +694,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${hasToppingsIncluded ? `<p class="expand-text-line"><strong>Toppings incluidos:</strong> ${product.toppings.join(', ')}</p>` : ''}
                 </div>` : ''}
                 ${sizeSection}
+                ${smoothieOptionsSection}
                 ${toppingsExtraSection}
                 <div class="expand-section">
                     <h4><i class="fas fa-sticky-note"></i> Nota especial</h4>
@@ -690,16 +720,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function bindExpandEvents(expandEl, product) {
         const isOnlyGrande = product.onlyGrande;
+        const isSmoothie = product.category === 'smoothies';
         let size = isOnlyGrande ? 'único' : 'mediano';
         let currentPrice = product.price;
         let qty = 1, selectedToppings = [];
+        let proteinChoice = 'none', milkChoice = '';
+        let proteinPrice = 0;
 
         function updateTotal() {
             const extras = selectedToppings.reduce((s, tid) => {
                 const t = EXTRA_TOPPINGS.find(tp => tp.id === tid);
                 return s + (t ? t.price : 0);
             }, 0);
-            const total = (currentPrice + extras) * qty;
+            const total = (currentPrice + extras + proteinPrice) * qty;
             expandEl.querySelector('.expand-total-price').textContent = '$' + total.toFixed(2);
         }
 
@@ -712,6 +745,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 size = btn.dataset.size;
                 currentPrice = parseFloat(btn.dataset.price);
                 updateTotal();
+            });
+        });
+
+        // Smoothie protein options
+        expandEl.querySelectorAll('#smoothie-protein-opts .option-pill').forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.stopPropagation();
+                expandEl.querySelectorAll('#smoothie-protein-opts .option-pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                pill.querySelector('input').checked = true;
+                proteinChoice = pill.dataset.protein;
+                proteinPrice = proteinChoice === 'sascha' ? 2.50 : 0;
+                updateTotal();
+            });
+        });
+
+        // Smoothie milk options
+        expandEl.querySelectorAll('#smoothie-milk-opts .option-pill').forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                e.stopPropagation();
+                expandEl.querySelectorAll('#smoothie-milk-opts .option-pill').forEach(p => p.classList.remove('active'));
+                pill.classList.add('active');
+                pill.querySelector('input').checked = true;
+                milkChoice = pill.dataset.milk;
             });
         });
 
@@ -759,6 +816,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 0);
             const note = noteInput ? noteInput.value.trim() : '';
 
+            // Build extras description
+            let extras = [];
+            if (proteinChoice === 'sascha') extras.push('Proteína Sascha');
+            if (milkChoice) extras.push(milkChoice === 'almendras' ? 'Leche de Almendras' : 'Leche Entera');
+
             cart.push({
                 id: Date.now(),
                 productId: product.id,
@@ -766,12 +828,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 emoji: product.emoji,
                 size: size,
                 sizeMultiplier: 1,
-                toppings: toppingNames,
-                toppingsPrice: toppingsPrice,
+                toppings: [...toppingNames, ...extras],
+                toppingsPrice: toppingsPrice + proteinPrice,
                 basePrice: currentPrice,
                 quantity: qty,
                 note: note,
-                total: (currentPrice + toppingsPrice) * qty
+                protein: proteinChoice !== 'none' ? proteinChoice : '',
+                milk: milkChoice || '',
+                total: (currentPrice + toppingsPrice + proteinPrice) * qty
             });
 
             updateCartUI();
@@ -1519,6 +1583,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let ordersUnsubscribe = null;
     let posCart = [];
     let posPaymentMethod = 'efectivo';
+    let posTipAmount = 0;
     let todaySales = [];
     let notificationSound = null;
 
@@ -1757,6 +1822,7 @@ document.addEventListener('DOMContentLoaded', function() {
         container.innerHTML = MENU_ITEMS.map(item => {
             const inv = inventoryCache[String(item.id)];
             const isActive = inv ? inv.active !== false : true;
+            const qty = inv && inv.qty !== undefined ? inv.qty : '';
             return `
             <div class="inventory-item ${!isActive ? 'inactive' : ''}">
                 ${item.image ? `<img src="${item.image}" class="inventory-img" alt="${item.name}">` : `<span class="inventory-emoji">${item.emoji}</span>`}
@@ -1781,10 +1847,77 @@ document.addEventListener('DOMContentLoaded', function() {
                 parentItem.classList.toggle('inactive', !active);
                 db.collection('inventory').doc(productId).set({ active }, { merge: true })
                     .then(() => {
-                        inventoryCache[productId] = { active };
+                        inventoryCache[productId] = { ...inventoryCache[productId], active };
                         showToast(`${active ? 'Activado' : 'Desactivado'}: ${MENU_ITEMS.find(i => i.id == productId)?.name}`, active ? 'success' : 'warning');
                     })
                     .catch(err => showToast('Error actualizando inventario', 'warning'));
+            });
+        });
+
+        // Inventory tab switching
+        document.querySelectorAll('.inv-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.inv-tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const tab = btn.dataset.invTab;
+                $('inv-tab-productos').classList.toggle('hidden', tab !== 'productos');
+                $('inv-tab-ingredientes').classList.toggle('hidden', tab !== 'ingredientes');
+                if (tab === 'ingredientes') renderIngredients();
+            });
+        });
+    }
+
+    function renderIngredients() {
+        const container = $('ingredients-list');
+        if (typeof INVENTORY_INGREDIENTS === 'undefined') {
+            container.innerHTML = '<p class="no-orders">Sin ingredientes definidos</p>';
+            return;
+        }
+        // Group by category
+        const groups = {};
+        INVENTORY_INGREDIENTS.forEach(ing => {
+            if (!groups[ing.category]) groups[ing.category] = [];
+            groups[ing.category].push(ing);
+        });
+
+        // Load current stock from Firestore
+        db.collection('ingredients').get().then(snapshot => {
+            const stockData = {};
+            snapshot.forEach(doc => stockData[doc.id] = doc.data());
+
+            container.innerHTML = Object.entries(groups).map(([cat, items]) => `
+                <div class="ingredient-group-title">${cat}</div>
+                ${items.map(ing => {
+                    const stock = stockData[ing.id];
+                    const qty = stock ? (stock.qty || 0) : 0;
+                    return `
+                    <div class="inventory-item">
+                        <span class="inventory-emoji">${ing.emoji}</span>
+                        <div class="inventory-info">
+                            <div class="inventory-name">${ing.name}</div>
+                            <div class="inventory-cat">${ing.unit}</div>
+                        </div>
+                        <div class="inventory-qty-wrap">
+                            <input type="number" class="inventory-qty-input" data-ing-id="${ing.id}" value="${qty}" min="0" placeholder="0">
+                            <span class="inventory-qty-label">${ing.unit}</span>
+                        </div>
+                    </div>`;
+                }).join('')}
+            `).join('');
+
+            // Bind qty change events (debounced save)
+            let saveTimeout;
+            container.querySelectorAll('.inventory-qty-input').forEach(input => {
+                input.addEventListener('change', () => {
+                    const ingId = input.dataset.ingId;
+                    const val = parseInt(input.value) || 0;
+                    clearTimeout(saveTimeout);
+                    saveTimeout = setTimeout(() => {
+                        db.collection('ingredients').doc(ingId).set({ qty: val }, { merge: true })
+                            .then(() => showToast('Stock actualizado', 'success'))
+                            .catch(() => showToast('Error guardando stock', 'warning'));
+                    }, 500);
+                });
             });
         });
     }
@@ -1834,12 +1967,37 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
+        // Tip buttons
+        document.querySelectorAll('.pos-tip-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const tipVal = btn.dataset.tip;
+                if (tipVal === 'custom') {
+                    $('pos-tip-custom').classList.remove('hidden');
+                    posTipAmount = parseFloat($('pos-tip-amount').value) || 0;
+                } else {
+                    $('pos-tip-custom').classList.add('hidden');
+                    posTipAmount = parseFloat(tipVal) || 0;
+                }
+                renderPOSInvoice();
+            });
+        });
+        const tipCustomInput = $('pos-tip-amount');
+        if (tipCustomInput) {
+            tipCustomInput.addEventListener('input', () => {
+                posTipAmount = parseFloat(tipCustomInput.value) || 0;
+                renderPOSInvoice();
+            });
+        }
+
         // Cash received input
         const cashInput = $('pos-cash-received');
         if (cashInput) {
             cashInput.addEventListener('input', () => {
                 const received = parseFloat(cashInput.value) || 0;
-                const total = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+                const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+                const total = subtotal + posTipAmount;
                 const change = received - total;
                 $('pos-change-amount').textContent = change >= 0 ? '$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
                 $('pos-change-amount').style.color = change >= 0 ? '#00e096' : '#ff6b6b';
@@ -1849,6 +2007,11 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear invoice
         $('pos-clear').addEventListener('click', () => {
             posCart = [];
+            posTipAmount = 0;
+            document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.pos-tip-btn[data-tip="0"]').classList.add('active');
+            $('pos-tip-custom').classList.add('hidden');
+            if ($('pos-tip-amount')) $('pos-tip-amount').value = '';
             renderPOSInvoice();
         });
 
@@ -1967,8 +2130,9 @@ document.addEventListener('DOMContentLoaded', function() {
         `).join('');
 
         const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+        const totalWithTip = subtotal + posTipAmount;
         $('pos-subtotal').textContent = '$' + subtotal.toFixed(2);
-        $('pos-total').textContent = '$' + subtotal.toFixed(2);
+        $('pos-total').textContent = '$' + totalWithTip.toFixed(2);
 
         // Bind qty buttons
         container.querySelectorAll('[data-pos-action]').forEach(btn => {
@@ -1995,17 +2159,20 @@ document.addEventListener('DOMContentLoaded', function() {
         const cashInput = $('pos-cash-received');
         if (cashInput && cashInput.value) {
             const received = parseFloat(cashInput.value) || 0;
-            const change = received - subtotal;
+            const change = received - totalWithTip;
             $('pos-change-amount').textContent = change >= 0 ? '$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
         }
     }
 
     function processPOSSale() {
         if (posCart.length === 0) return;
-        const total = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+        const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+        const total = subtotal + posTipAmount;
 
         const sale = {
             items: posCart.map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, size: i.size || '', total: i.price * i.qty })),
+            subtotal,
+            tip: posTipAmount,
             total,
             paymentMethod: posPaymentMethod,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2013,8 +2180,14 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         db.collection('sales').add(sale).then(() => {
-            showToast(`Venta registrada: $${total.toFixed(2)} (${posPaymentMethod})`, 'success');
+            const tipMsg = posTipAmount > 0 ? ` + propina $${posTipAmount.toFixed(2)}` : '';
+            showToast(`Venta registrada: $${total.toFixed(2)} (${posPaymentMethod}${tipMsg})`, 'success');
             posCart = [];
+            posTipAmount = 0;
+            document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.pos-tip-btn[data-tip="0"]').classList.add('active');
+            $('pos-tip-custom').classList.add('hidden');
+            if ($('pos-tip-amount')) $('pos-tip-amount').value = '';
             renderPOSInvoice();
             const cashInput = $('pos-cash-received');
             if (cashInput) { cashInput.value = ''; $('pos-change-amount').textContent = '$0.00'; }
@@ -2280,53 +2453,94 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // DASHBOARD FINANCIERO
     // ========================================
-    let dashYear, dashMonth;
+    let dashRangeMode = 'day'; // day, week, month, custom
+    let dashRefDate = new Date(); // reference date for navigation
 
     function initDashboard() {
-        const now = new Date();
-        dashYear = now.getFullYear();
-        dashMonth = now.getMonth(); // 0-indexed
+        dashRefDate = new Date();
+        dashRangeMode = 'day';
 
-        $('dash-prev-month').addEventListener('click', () => {
-            dashMonth--;
-            if (dashMonth < 0) { dashMonth = 11; dashYear--; }
-            loadDashboard();
+        // Range tab buttons
+        document.querySelectorAll('.dash-range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.dash-range-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                dashRangeMode = btn.dataset.range;
+                const customEl = $('dash-custom-range');
+                if (dashRangeMode === 'custom') {
+                    customEl.classList.remove('hidden');
+                } else {
+                    customEl.classList.add('hidden');
+                    dashRefDate = new Date();
+                    loadDashboard();
+                }
+            });
         });
 
-        $('dash-next-month').addEventListener('click', () => {
-            dashMonth++;
-            if (dashMonth > 11) { dashMonth = 0; dashYear++; }
-            loadDashboard();
-        });
+        // Prev/Next
+        $('dash-prev').addEventListener('click', () => { navigateDash(-1); });
+        $('dash-next').addEventListener('click', () => { navigateDash(1); });
+
+        // Custom range apply
+        $('dash-apply-range').addEventListener('click', () => { loadDashboard(); });
+
+        // Set default dates for custom inputs
+        const today = new Date().toISOString().split('T')[0];
+        $('dash-date-from').value = today;
+        $('dash-date-to').value = today;
+    }
+
+    function navigateDash(dir) {
+        if (dashRangeMode === 'day') dashRefDate.setDate(dashRefDate.getDate() + dir);
+        else if (dashRangeMode === 'week') dashRefDate.setDate(dashRefDate.getDate() + (7 * dir));
+        else if (dashRangeMode === 'month') dashRefDate.setMonth(dashRefDate.getMonth() + dir);
+        loadDashboard();
+    }
+
+    function getDashDateRange() {
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        let startTs, endTs, label;
+        const d = new Date(dashRefDate);
+
+        if (dashRangeMode === 'day') {
+            startTs = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            endTs = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+            const isToday = startTs.toDateString() === new Date().toDateString();
+            label = isToday ? 'Hoy' : startTs.toLocaleDateString('es-PA', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        } else if (dashRangeMode === 'week') {
+            const dayOfWeek = d.getDay();
+            const monday = new Date(d); monday.setDate(d.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+            startTs = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate());
+            endTs = new Date(startTs); endTs.setDate(endTs.getDate() + 7);
+            label = `${startTs.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' })} — ${new Date(endTs - 86400000).toLocaleDateString('es-PA', { day: 'numeric', month: 'short' })}`;
+        } else if (dashRangeMode === 'month') {
+            startTs = new Date(d.getFullYear(), d.getMonth(), 1);
+            endTs = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+            label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+        } else { // custom
+            const from = $('dash-date-from').value;
+            const to = $('dash-date-to').value;
+            if (!from || !to) { return null; }
+            startTs = new Date(from + 'T00:00:00');
+            endTs = new Date(to + 'T23:59:59');
+            endTs.setDate(endTs.getDate() + 1); endTs.setHours(0, 0, 0, 0);
+            label = `${startTs.toLocaleDateString('es-PA', { day: 'numeric', month: 'short' })} — ${new Date(to + 'T12:00:00').toLocaleDateString('es-PA', { day: 'numeric', month: 'short' })}`;
+        }
+        return { startTs, endTs, label };
     }
 
     function loadDashboard() {
-        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-        $('dash-current-month').textContent = `${monthNames[dashMonth]} ${dashYear}`;
+        const range = getDashDateRange();
+        if (!range) return;
+        $('dash-current-label').textContent = range.label;
 
-        // Date range for the month
-        const startDate = `${dashYear}-${String(dashMonth + 1).padStart(2, '0')}-01`;
-        const endMonth = dashMonth + 2 > 12 ? 1 : dashMonth + 2;
-        const endYear = dashMonth + 2 > 12 ? dashYear + 1 : dashYear;
-        const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
+        // Also compute string dates for expense filtering
+        const startDateStr = range.startTs.toISOString().split('T')[0];
+        const endDateStr = range.endTs.toISOString().split('T')[0];
 
-        // Fetch sales, expenses, and orders for the month in parallel
         const salesPromise = db.collection('sales')
-            .where('date', '>=', new Date(startDate).toLocaleDateString('es-PA'))
-            .get().then(snap => {
-                // Because 'date' is stored as locale string, we filter manually
-                const sales = [];
-                snap.forEach(doc => sales.push({ id: doc.id, ...doc.data() }));
-                return sales;
-            }).catch(() => []);
-
-        // Use createdAt for more reliable date filtering on sales
-        const startTs = new Date(startDate);
-        const endTs = new Date(endDate);
-
-        const salesByTimestamp = db.collection('sales')
-            .where('createdAt', '>=', startTs)
-            .where('createdAt', '<', endTs)
+            .where('createdAt', '>=', range.startTs)
+            .where('createdAt', '<', range.endTs)
             .get().then(snap => {
                 const sales = [];
                 snap.forEach(doc => sales.push({ id: doc.id, ...doc.data() }));
@@ -2334,8 +2548,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(() => []);
 
         const expensesPromise = db.collection('expenses')
-            .where('date', '>=', startDate)
-            .where('date', '<', endDate)
+            .where('date', '>=', startDateStr)
+            .where('date', '<', endDateStr)
             .orderBy('date', 'desc')
             .get().then(snap => {
                 const expenses = [];
@@ -2344,8 +2558,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(() => []);
 
         const ordersPromise = db.collection('orders')
-            .where('createdAt', '>=', startTs)
-            .where('createdAt', '<', endTs)
+            .where('createdAt', '>=', range.startTs)
+            .where('createdAt', '<', range.endTs)
             .orderBy('createdAt', 'desc')
             .get().then(snap => {
                 const orders = [];
@@ -2353,7 +2567,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return orders;
             }).catch(() => []);
 
-        Promise.all([salesByTimestamp, expensesPromise, ordersPromise]).then(([sales, expenses, orders]) => {
+        Promise.all([salesPromise, expensesPromise, ordersPromise]).then(([sales, expenses, orders]) => {
             renderDashSummary(sales, expenses, orders);
             renderDashPayments(sales);
             renderDashTopProducts(sales);
@@ -2363,22 +2577,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderDashSummary(sales, expenses, orders) {
         const totalSales = sales.reduce((s, sale) => s + (sale.total || 0), 0);
+        const totalTips = sales.reduce((s, sale) => s + (sale.tip || 0), 0);
         const totalExpenses = expenses.reduce((s, exp) => s + (exp.amount || 0), 0);
         const netProfit = totalSales - totalExpenses;
         const validOrders = orders.filter(o => o.status !== 'cancelado');
+        const txCount = sales.length;
 
         $('dash-summary').innerHTML = `
             <div class="dash-summary-card">
                 <div class="dash-summary-icon green"><i class="fas fa-dollar-sign"></i></div>
                 <div class="dash-summary-info">
-                    <span>Total Ventas</span>
+                    <span>Ventas (${txCount} tx)</span>
                     <div class="dash-summary-value">$${totalSales.toFixed(2)}</div>
                 </div>
             </div>
             <div class="dash-summary-card">
                 <div class="dash-summary-icon red"><i class="fas fa-arrow-down"></i></div>
                 <div class="dash-summary-info">
-                    <span>Total Gastos</span>
+                    <span>Gastos</span>
                     <div class="dash-summary-value">$${totalExpenses.toFixed(2)}</div>
                 </div>
             </div>
@@ -2390,47 +2606,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
             <div class="dash-summary-card">
-                <div class="dash-summary-icon blue"><i class="fas fa-receipt"></i></div>
+                <div class="dash-summary-icon blue"><i class="fas fa-heart"></i></div>
                 <div class="dash-summary-info">
-                    <span># Pedidos</span>
-                    <div class="dash-summary-value">${validOrders.length}</div>
+                    <span>Propinas</span>
+                    <div class="dash-summary-value">$${totalTips.toFixed(2)}</div>
                 </div>
             </div>
         `;
     }
 
     function renderDashPayments(sales) {
+        // Always show all 3 methods even if 0
+        const allMethods = ['efectivo', 'yappy', 'tarjeta'];
+        const methodLabels = { 'efectivo': 'Efectivo', 'yappy': 'Yappy', 'tarjeta': 'Tarjeta' };
+        const methodColors = { 'efectivo': 'cash', 'yappy': 'yappy', 'tarjeta': 'card' };
+        const methodIcons = { 'efectivo': 'fa-money-bill-wave', 'yappy': 'fa-mobile-alt', 'tarjeta': 'fa-credit-card' };
+
         const methods = {};
+        const counts = {};
+        allMethods.forEach(m => { methods[m] = 0; counts[m] = 0; });
         sales.forEach(sale => {
-            const method = sale.paymentMethod || 'Efectivo';
-            methods[method] = (methods[method] || 0) + (sale.total || 0);
+            const m = (sale.paymentMethod || 'efectivo').toLowerCase();
+            methods[m] = (methods[m] || 0) + (sale.total || 0);
+            counts[m] = (counts[m] || 0) + 1;
         });
 
-        const total = Object.values(methods).reduce((s, v) => s + v, 0) || 1;
-        const methodColors = { 'Efectivo': 'cash', 'Yappy': 'yappy', 'Tarjeta': 'card' };
-        const methodIcons = { 'Efectivo': 'fa-money-bill-wave', 'Yappy': 'fa-mobile-alt', 'Tarjeta': 'fa-credit-card' };
-
+        const grandTotal = Object.values(methods).reduce((s, v) => s + v, 0) || 1;
         const content = $('dash-payments-content');
-        if (Object.keys(methods).length === 0) {
-            content.innerHTML = '<p style="opacity:.5;text-align:center;padding:20px">Sin ventas este mes</p>';
-            return;
-        }
 
-        content.innerHTML = Object.entries(methods).map(([method, amount]) => {
-            const pct = Math.round((amount / total) * 100);
-            const colorClass = methodColors[method] || 'cash';
+        content.innerHTML = allMethods.map(method => {
+            const amount = methods[method];
+            const count = counts[method];
+            const pct = Math.round((amount / grandTotal) * 100);
             return `
             <div class="dash-payment-row">
                 <div style="display:flex;align-items:center;gap:8px;min-width:100px">
-                    <i class="fas ${methodIcons[method] || 'fa-money-bill-wave'}" style="opacity:.6"></i>
-                    <span>${method}</span>
+                    <i class="fas ${methodIcons[method]}" style="opacity:.6"></i>
+                    <span>${methodLabels[method]}</span>
+                    <span style="font-size:11px;opacity:.4">(${count})</span>
                 </div>
                 <div class="dash-payment-bar-bg">
-                    <div class="dash-payment-bar-fill ${colorClass}" style="width:${pct}%"></div>
+                    <div class="dash-payment-bar-fill ${methodColors[method]}" style="width:${pct}%"></div>
                 </div>
                 <span style="min-width:80px;text-align:right;font-weight:600">$${amount.toFixed(2)}</span>
             </div>`;
-        }).join('');
+        }).join('') + `
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-weight:700">
+                <span>Total Cierre</span><span style="color:var(--accent)">$${grandTotal === 1 ? '0.00' : Object.values(methods).reduce((s, v) => s + v, 0).toFixed(2)}</span>
+            </div>`;
     }
 
     function renderDashTopProducts(sales) {
@@ -2448,7 +2671,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const content = $('dash-top-content');
 
         if (!sorted.length) {
-            content.innerHTML = '<p style="opacity:.5;text-align:center;padding:20px">Sin datos este mes</p>';
+            content.innerHTML = '<p style="opacity:.5;text-align:center;padding:20px">Sin datos en este período</p>';
             return;
         }
 
@@ -2464,37 +2687,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderDashRecent(orders, expenses) {
         const content = $('dash-recent-content');
-        // Combine and sort by date
         const timeline = [];
 
-        orders.slice(0, 5).forEach(o => {
+        orders.slice(0, 8).forEach(o => {
             const date = o.createdAt ? new Date(o.createdAt.seconds * 1000) : new Date();
-            timeline.push({
-                type: 'order',
-                date,
-                text: `Pedido ${o.number || o.id} — $${(o.total || 0).toFixed(2)}`,
-                status: o.status,
-                icon: 'fa-shopping-bag',
-                color: o.status === 'cancelado' ? '#ff4757' : '#00e096'
-            });
+            timeline.push({ type: 'order', date, text: `Pedido ${o.number || o.id} — $${(o.total || 0).toFixed(2)}`, status: o.status, icon: 'fa-shopping-bag', color: o.status === 'cancelado' ? '#ff4757' : '#00e096' });
         });
 
         expenses.slice(0, 5).forEach(e => {
             const date = e.createdAt ? new Date(e.createdAt.seconds * 1000) : new Date(e.date + 'T12:00:00');
-            timeline.push({
-                type: 'expense',
-                date,
-                text: `${e.description} — $${(e.amount || 0).toFixed(2)}`,
-                status: e.category,
-                icon: 'fa-file-invoice-dollar',
-                color: '#ff4757'
-            });
+            timeline.push({ type: 'expense', date, text: `${e.description} — $${(e.amount || 0).toFixed(2)}`, status: e.category, icon: 'fa-file-invoice-dollar', color: '#ff4757' });
         });
 
         timeline.sort((a, b) => b.date - a.date);
 
         if (!timeline.length) {
-            content.innerHTML = '<p style="opacity:.5;text-align:center;padding:20px">Sin actividad este mes</p>';
+            content.innerHTML = '<p style="opacity:.5;text-align:center;padding:20px">Sin actividad en este período</p>';
             return;
         }
 
