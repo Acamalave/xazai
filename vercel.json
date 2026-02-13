@@ -3,6 +3,8 @@
   "outputDirectory": ".",
   "framework": null,
   "rewrites": [
+    { "source": "/api/create-payment", "destination": "/api/create-payment" },
+    { "source": "/api/pagosbg", "destination": "/api/pagosbg" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
