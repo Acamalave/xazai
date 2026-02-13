@@ -389,11 +389,11 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('xazai_user');
         hideMisPedidosTab();
         showToast('Sesión cerrada', 'info');
-        // Re-render inicio to remove reorder section
-        const activeTab = document.querySelector('.tab.active');
-        if (activeTab && activeTab.dataset.category === 'inicio') {
-            renderAllProducts();
-        }
+        // Always switch back to Inicio tab
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        const inicioTab = document.querySelector('[data-category="inicio"]');
+        if (inicioTab) inicioTab.classList.add('active');
+        renderCategory('inicio');
     });
 
     function openLoginModal() {
