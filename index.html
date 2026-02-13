@@ -212,6 +212,14 @@
                     <i class="fas fa-boxes-stacked"></i>
                     <span>Inventario</span>
                 </button>
+                <button class="admin-nav-btn" data-section="expenses">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    <span>Gastos</span>
+                </button>
+                <button class="admin-nav-btn" data-section="dashboard">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </button>
             </nav>
             <button class="admin-logout-btn" id="admin-logout">
                 <i class="fas fa-sign-out-alt"></i>
@@ -229,6 +237,7 @@
                         <button class="filter-btn" data-status="preparando">Preparando</button>
                         <button class="filter-btn" data-status="listo">Listos</button>
                         <button class="filter-btn" data-status="entregado">Entregados</button>
+                        <button class="filter-btn" data-status="cancelado">Cancelados</button>
                     </div>
                 </div>
                 <div class="admin-orders-grid" id="admin-orders-list">
@@ -308,6 +317,84 @@
                     <p class="admin-section-subtitle">Activa o desactiva productos del menú en tiempo real</p>
                 </div>
                 <div class="inventory-list" id="inventory-list"></div>
+            </section>
+
+            <!-- GASTOS Section -->
+            <section id="admin-sec-expenses" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-file-invoice-dollar"></i> Registro de Gastos</h2>
+                    <p class="admin-section-subtitle">Lleva el control de facturas y gastos del negocio</p>
+                </div>
+                <div class="expense-form-card">
+                    <h3><i class="fas fa-plus-circle"></i> Nuevo Gasto</h3>
+                    <div class="expense-form-grid">
+                        <div class="expense-field">
+                            <label>Foto de Factura</label>
+                            <div class="expense-img-upload" id="expense-img-upload">
+                                <input type="file" id="expense-file-input" accept="image/*" capture="environment" style="display:none">
+                                <div class="expense-img-placeholder" id="expense-img-placeholder">
+                                    <i class="fas fa-camera"></i>
+                                    <span>Tomar foto o subir imagen</span>
+                                </div>
+                                <img id="expense-img-preview" class="expense-img-preview" style="display:none" alt="Preview">
+                            </div>
+                        </div>
+                        <div class="expense-field">
+                            <label>Descripción</label>
+                            <input type="text" id="expense-description" placeholder="Ej: Compra de frutas">
+                        </div>
+                        <div class="expense-field">
+                            <label>Categoría</label>
+                            <select id="expense-category">
+                                <option value="proveedor">Proveedor</option>
+                                <option value="servicios">Servicios</option>
+                                <option value="mantenimiento">Mantenimiento</option>
+                                <option value="inventario">Inventario</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                        <div class="expense-field">
+                            <label>Monto ($)</label>
+                            <input type="number" id="expense-amount" placeholder="0.00" min="0" step="0.01">
+                        </div>
+                        <div class="expense-field">
+                            <label>Fecha</label>
+                            <input type="date" id="expense-date">
+                        </div>
+                    </div>
+                    <button class="expense-save-btn" id="expense-save-btn">
+                        <i class="fas fa-save"></i> Guardar Gasto
+                    </button>
+                </div>
+                <div id="expenses-list"></div>
+            </section>
+
+            <!-- DASHBOARD Section -->
+            <section id="admin-sec-dashboard" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-chart-line"></i> Dashboard Financiero</h2>
+                    <p class="admin-section-subtitle">Vista resumida de ventas, gastos y ganancias</p>
+                </div>
+                <div class="dash-month-selector">
+                    <button id="dash-prev-month"><i class="fas fa-chevron-left"></i></button>
+                    <span id="dash-current-month">Febrero 2026</span>
+                    <button id="dash-next-month"><i class="fas fa-chevron-right"></i></button>
+                </div>
+                <div class="dash-summary-grid" id="dash-summary"></div>
+                <div class="dash-grid-2col">
+                    <div class="dash-panel" id="dash-payments">
+                        <h3><i class="fas fa-wallet"></i> Desglose por Método</h3>
+                        <div id="dash-payments-content"></div>
+                    </div>
+                    <div class="dash-panel" id="dash-top-products">
+                        <h3><i class="fas fa-trophy"></i> Top 5 Productos</h3>
+                        <div id="dash-top-content"></div>
+                    </div>
+                </div>
+                <div class="dash-panel" id="dash-recent">
+                    <h3><i class="fas fa-clock"></i> Actividad Reciente</h3>
+                    <div id="dash-recent-content"></div>
+                </div>
             </section>
         </main>
     </div>

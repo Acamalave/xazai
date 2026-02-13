@@ -1556,6 +1556,9 @@ document.addEventListener('DOMContentLoaded', function() {
         loadInventory();
         renderPOS();
         loadTodaySales();
+        // Init new sections
+        initExpenses();
+        initDashboard();
     }
 
     function exitAdminMode() {
@@ -1592,6 +1595,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const section = navBtn.dataset.section;
         document.querySelectorAll('.admin-section').forEach(s => s.classList.add('hidden'));
         $('admin-sec-' + section).classList.remove('hidden');
+        // Load data for the section
+        if (section === 'expenses') loadExpenses();
+        if (section === 'dashboard') loadDashboard();
     });
 
     // Admin orders filter
@@ -1651,6 +1657,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        const canCancel = (status) => !['entregado', 'cancelado'].includes(status);
+
         container.innerHTML = filtered.map(order => {
             const items = order.items || [];
             const dateStr = order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleString('es-PA') : '';
@@ -1669,16 +1677,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span>Cliente: ${order.customerName || 'Invitado'}</span>
                 </div>
                 ${order.address ? `<div style="font-size:11px;color:var(--text-light);margin-bottom:8px;"><i class="fas fa-map-marker-alt" style="color:var(--accent);margin-right:4px;"></i>${order.address}</div>` : ''}
+                ${order.status === 'cancelado' && order.cancelReason ? `<div class="order-cancel-reason"><i class="fas fa-ban"></i> ${order.cancelReason}</div>` : ''}
                 <div class="order-actions">
                     ${order.status === 'pendiente' ? `<button class="order-action-btn btn-preparando" data-order-id="${order.id}">Preparando</button>` : ''}
                     ${order.status === 'preparando' ? `<button class="order-action-btn btn-listo" data-order-id="${order.id}">Listo</button>` : ''}
                     ${order.status === 'listo' ? `<button class="order-action-btn btn-entregado" data-order-id="${order.id}">Entregado</button>` : ''}
+                    ${canCancel(order.status) ? `<button class="order-action-btn btn-cancelar" data-cancel-id="${order.id}">Cancelar</button>` : ''}
+                </div>
+                <div class="cancel-form hidden" id="cancel-form-${order.id}">
+                    <input type="text" placeholder="Razón de cancelación..." id="cancel-reason-${order.id}">
+                    <button class="cancel-confirm-btn" data-confirm-cancel="${order.id}">Confirmar Cancelación</button>
                 </div>
             </div>`;
         }).join('');
 
         // Bind status change buttons
-        container.querySelectorAll('.order-action-btn').forEach(btn => {
+        container.querySelectorAll('.order-action-btn:not(.btn-cancelar)').forEach(btn => {
             btn.addEventListener('click', () => {
                 const orderId = btn.dataset.orderId;
                 let newStatus = '';
@@ -1690,6 +1704,37 @@ document.addEventListener('DOMContentLoaded', function() {
                         .then(() => showToast(`Pedido actualizado: ${newStatus}`, 'success'))
                         .catch(err => showToast('Error actualizando pedido', 'warning'));
                 }
+            });
+        });
+
+        // Bind cancel buttons (toggle cancel form)
+        container.querySelectorAll('.btn-cancelar').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const orderId = btn.dataset.cancelId;
+                const form = $('cancel-form-' + orderId);
+                form.classList.toggle('hidden');
+                if (!form.classList.contains('hidden')) {
+                    form.querySelector('input').focus();
+                }
+            });
+        });
+
+        // Bind confirm cancel buttons
+        container.querySelectorAll('[data-confirm-cancel]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const orderId = btn.dataset.confirmCancel;
+                const reason = $('cancel-reason-' + orderId).value.trim();
+                if (!reason) {
+                    showToast('Escribe la razón de cancelación', 'warning');
+                    return;
+                }
+                db.collection('orders').doc(orderId).update({
+                    status: 'cancelado',
+                    cancelReason: reason,
+                    cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => {
+                    showToast('Pedido cancelado', 'success');
+                }).catch(err => showToast('Error cancelando pedido', 'warning'));
             });
         });
     }
@@ -1816,30 +1861,78 @@ document.addEventListener('DOMContentLoaded', function() {
         const items = category === 'all' ? MENU_ITEMS : MENU_ITEMS.filter(i => i.category === category);
         container.innerHTML = items.map(item => {
             const isAvailable = isProductAvailable(item.id);
+            const hasSizes = item.priceGrande !== null && item.priceGrande !== undefined && !item.onlyGrande;
             return `
-            <div class="pos-product-card ${!isAvailable ? 'disabled' : ''}" data-product-id="${item.id}">
+            <div class="pos-product-card ${!isAvailable ? 'disabled' : ''}" data-product-id="${item.id}" data-has-sizes="${hasSizes}">
                 ${item.image ? `<img src="${item.image}" class="pos-product-img" alt="${item.name}">` : `<span class="pos-product-emoji">${item.emoji}</span>`}
                 <span class="pos-product-name">${item.name}</span>
-                <span class="pos-product-price">$${item.price.toFixed(2)}</span>
+                <span class="pos-product-price">${hasSizes ? `M $${item.price.toFixed(2)} / G $${item.priceGrande.toFixed(2)}` : `$${(item.onlyGrande ? item.priceGrande : item.price).toFixed(2)}`}</span>
+                ${hasSizes ? `
+                <div class="pos-size-picker hidden" data-product-id="${item.id}">
+                    <button class="pos-size-btn" data-size="M" data-price="${item.price}">
+                        <span class="size-label">M</span>
+                        <span>$${item.price.toFixed(2)}</span>
+                    </button>
+                    <button class="pos-size-btn" data-size="G" data-price="${item.priceGrande}">
+                        <span class="size-label">G</span>
+                        <span>$${item.priceGrande.toFixed(2)}</span>
+                    </button>
+                    <button class="pos-size-close"><i class="fas fa-times"></i></button>
+                </div>` : ''}
             </div>`;
         }).join('');
 
         container.querySelectorAll('.pos-product-card:not(.disabled)').forEach(card => {
-            card.addEventListener('click', () => {
+            card.addEventListener('click', (e) => {
+                // Don't trigger if clicking size picker buttons
+                if (e.target.closest('.pos-size-picker')) return;
                 const productId = parseInt(card.dataset.productId);
-                addToPOSCart(productId);
+                const hasSizes = card.dataset.hasSizes === 'true';
+                if (hasSizes) {
+                    // Close any other open pickers
+                    container.querySelectorAll('.pos-size-picker').forEach(p => p.classList.add('hidden'));
+                    card.querySelector('.pos-size-picker').classList.remove('hidden');
+                } else {
+                    const product = MENU_ITEMS.find(i => i.id === productId);
+                    const price = product.onlyGrande ? product.priceGrande : product.price;
+                    const size = product.onlyGrande ? 'G' : '';
+                    addToPOSCart(productId, size, price);
+                }
+            });
+        });
+
+        // Size picker buttons
+        container.querySelectorAll('.pos-size-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const picker = btn.closest('.pos-size-picker');
+                const productId = parseInt(picker.dataset.productId);
+                const size = btn.dataset.size;
+                const price = parseFloat(btn.dataset.price);
+                picker.classList.add('hidden');
+                addToPOSCart(productId, size, price);
+            });
+        });
+
+        // Close picker buttons
+        container.querySelectorAll('.pos-size-close').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                btn.closest('.pos-size-picker').classList.add('hidden');
             });
         });
     }
 
-    function addToPOSCart(productId) {
+    function addToPOSCart(productId, size = '', price = null) {
         const product = MENU_ITEMS.find(i => i.id === productId);
         if (!product) return;
-        const existing = posCart.find(i => i.productId === productId);
+        const finalPrice = price !== null ? price : product.price;
+        // Match by productId + size for duplicates
+        const existing = posCart.find(i => i.productId === productId && i.size === size);
         if (existing) {
             existing.qty++;
         } else {
-            posCart.push({ productId, name: product.name, emoji: product.emoji, price: product.price, qty: 1 });
+            posCart.push({ productId, name: product.name, emoji: product.emoji, price: finalPrice, size, qty: 1 });
         }
         renderPOSInvoice();
     }
@@ -1860,7 +1953,7 @@ document.addEventListener('DOMContentLoaded', function() {
         container.innerHTML = posCart.map((item, idx) => `
             <div class="pos-inv-item">
                 <div class="pos-inv-info">
-                    <div class="pos-inv-name">${item.emoji} ${item.name}</div>
+                    <div class="pos-inv-name">${item.emoji} ${item.name}${item.size ? ` (${item.size})` : ''}</div>
                     <div class="pos-inv-price-unit">$${item.price.toFixed(2)} c/u</div>
                 </div>
                 <div class="pos-inv-qty">
@@ -1912,7 +2005,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const total = posCart.reduce((s, i) => s + i.price * i.qty, 0);
 
         const sale = {
-            items: posCart.map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, total: i.price * i.qty })),
+            items: posCart.map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, size: i.size || '', total: i.price * i.qty })),
             total,
             paymentMethod: posPaymentMethod,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -2020,6 +2113,402 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     })();
+
+    // ========================================
+    // EXPENSES (GASTOS)
+    // ========================================
+    let expenseImageBase64 = '';
+
+    function initExpenses() {
+        // Set default date to today
+        const dateInput = $('expense-date');
+        if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+
+        // Image upload handler
+        const fileInput = $('expense-file-input');
+        const uploadArea = $('expense-img-upload');
+        const placeholder = $('expense-img-placeholder');
+        const preview = $('expense-img-preview');
+
+        if (uploadArea) {
+            uploadArea.addEventListener('click', () => fileInput.click());
+        }
+
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                handleExpenseImage(file).then(base64 => {
+                    expenseImageBase64 = base64;
+                    preview.src = base64;
+                    preview.style.display = 'block';
+                    placeholder.style.display = 'none';
+                });
+            });
+        }
+
+        // Save expense
+        const saveBtn = $('expense-save-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', saveExpense);
+        }
+    }
+
+    function handleExpenseImage(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const maxSize = 800;
+                    let w = img.width, h = img.height;
+                    if (w > maxSize || h > maxSize) {
+                        if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                        else { w = Math.round(w * maxSize / h); h = maxSize; }
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', 0.7));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function saveExpense() {
+        const description = $('expense-description').value.trim();
+        const category = $('expense-category').value;
+        const amount = parseFloat($('expense-amount').value);
+        const date = $('expense-date').value;
+
+        if (!description || !amount || !date) {
+            showToast('Completa todos los campos', 'warning');
+            return;
+        }
+
+        const expense = {
+            description,
+            category,
+            amount,
+            date,
+            imageBase64: expenseImageBase64 || '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        $('expense-save-btn').disabled = true;
+        db.collection('expenses').add(expense).then(() => {
+            showToast('Gasto guardado correctamente', 'success');
+            // Reset form
+            $('expense-description').value = '';
+            $('expense-amount').value = '';
+            $('expense-date').value = new Date().toISOString().split('T')[0];
+            $('expense-img-preview').style.display = 'none';
+            $('expense-img-placeholder').style.display = '';
+            expenseImageBase64 = '';
+            $('expense-file-input').value = '';
+            $('expense-save-btn').disabled = false;
+            loadExpenses();
+        }).catch(err => {
+            showToast('Error guardando gasto', 'warning');
+            $('expense-save-btn').disabled = false;
+        });
+    }
+
+    function loadExpenses() {
+        db.collection('expenses').orderBy('date', 'desc').limit(200).get().then(snapshot => {
+            const expenses = [];
+            snapshot.forEach(doc => expenses.push({ id: doc.id, ...doc.data() }));
+            renderExpenseCards(expenses);
+        });
+    }
+
+    function renderExpenseCards(expenses) {
+        const container = $('expenses-list');
+        if (!expenses.length) {
+            container.innerHTML = '<p class="no-orders">No hay gastos registrados</p>';
+            return;
+        }
+
+        // Group by date
+        const groups = {};
+        expenses.forEach(exp => {
+            const d = exp.date || 'Sin fecha';
+            if (!groups[d]) groups[d] = [];
+            groups[d].push(exp);
+        });
+
+        const categoryIcons = {
+            proveedor: 'fa-truck',
+            servicios: 'fa-bolt',
+            mantenimiento: 'fa-wrench',
+            inventario: 'fa-box',
+            otro: 'fa-receipt'
+        };
+
+        container.innerHTML = Object.keys(groups).map(date => {
+            const items = groups[date];
+            const total = items.reduce((s, i) => s + (i.amount || 0), 0);
+            const dateFormatted = new Date(date + 'T12:00:00').toLocaleDateString('es-PA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            return `
+            <div class="expense-date-group">
+                <div class="expense-date-header">
+                    <div>
+                        <strong>${dateFormatted}</strong>
+                        <span style="margin-left:12px;opacity:.6">${items.length} gasto${items.length > 1 ? 's' : ''}</span>
+                    </div>
+                    <span style="color:var(--accent);font-weight:700;font-size:1.1em">$${total.toFixed(2)}</span>
+                </div>
+                <div class="expense-items">
+                    ${items.map(exp => `
+                    <div class="expense-card">
+                        <div class="expense-card-icon ${exp.category || 'otro'}"><i class="fas ${categoryIcons[exp.category] || 'fa-receipt'}"></i></div>
+                        <div class="expense-card-info">
+                            <strong>${exp.description || 'Sin descripción'}</strong>
+                            <span>${exp.category || 'otro'}</span>
+                        </div>
+                        <div class="expense-card-amount">$${(exp.amount || 0).toFixed(2)}</div>
+                        ${exp.imageBase64 ? `<img class="expense-card-thumb" src="${exp.imageBase64}" alt="Factura" onclick="this.classList.toggle('expense-card-thumb-expanded')">` : ''}
+                    </div>`).join('')}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ========================================
+    // DASHBOARD FINANCIERO
+    // ========================================
+    let dashYear, dashMonth;
+
+    function initDashboard() {
+        const now = new Date();
+        dashYear = now.getFullYear();
+        dashMonth = now.getMonth(); // 0-indexed
+
+        $('dash-prev-month').addEventListener('click', () => {
+            dashMonth--;
+            if (dashMonth < 0) { dashMonth = 11; dashYear--; }
+            loadDashboard();
+        });
+
+        $('dash-next-month').addEventListener('click', () => {
+            dashMonth++;
+            if (dashMonth > 11) { dashMonth = 0; dashYear++; }
+            loadDashboard();
+        });
+    }
+
+    function loadDashboard() {
+        const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        $('dash-current-month').textContent = `${monthNames[dashMonth]} ${dashYear}`;
+
+        // Date range for the month
+        const startDate = `${dashYear}-${String(dashMonth + 1).padStart(2, '0')}-01`;
+        const endMonth = dashMonth + 2 > 12 ? 1 : dashMonth + 2;
+        const endYear = dashMonth + 2 > 12 ? dashYear + 1 : dashYear;
+        const endDate = `${endYear}-${String(endMonth).padStart(2, '0')}-01`;
+
+        // Fetch sales, expenses, and orders for the month in parallel
+        const salesPromise = db.collection('sales')
+            .where('date', '>=', new Date(startDate).toLocaleDateString('es-PA'))
+            .get().then(snap => {
+                // Because 'date' is stored as locale string, we filter manually
+                const sales = [];
+                snap.forEach(doc => sales.push({ id: doc.id, ...doc.data() }));
+                return sales;
+            }).catch(() => []);
+
+        // Use createdAt for more reliable date filtering on sales
+        const startTs = new Date(startDate);
+        const endTs = new Date(endDate);
+
+        const salesByTimestamp = db.collection('sales')
+            .where('createdAt', '>=', startTs)
+            .where('createdAt', '<', endTs)
+            .get().then(snap => {
+                const sales = [];
+                snap.forEach(doc => sales.push({ id: doc.id, ...doc.data() }));
+                return sales;
+            }).catch(() => []);
+
+        const expensesPromise = db.collection('expenses')
+            .where('date', '>=', startDate)
+            .where('date', '<', endDate)
+            .orderBy('date', 'desc')
+            .get().then(snap => {
+                const expenses = [];
+                snap.forEach(doc => expenses.push({ id: doc.id, ...doc.data() }));
+                return expenses;
+            }).catch(() => []);
+
+        const ordersPromise = db.collection('orders')
+            .where('createdAt', '>=', startTs)
+            .where('createdAt', '<', endTs)
+            .orderBy('createdAt', 'desc')
+            .get().then(snap => {
+                const orders = [];
+                snap.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
+                return orders;
+            }).catch(() => []);
+
+        Promise.all([salesByTimestamp, expensesPromise, ordersPromise]).then(([sales, expenses, orders]) => {
+            renderDashSummary(sales, expenses, orders);
+            renderDashPayments(sales);
+            renderDashTopProducts(sales);
+            renderDashRecent(orders, expenses);
+        });
+    }
+
+    function renderDashSummary(sales, expenses, orders) {
+        const totalSales = sales.reduce((s, sale) => s + (sale.total || 0), 0);
+        const totalExpenses = expenses.reduce((s, exp) => s + (exp.amount || 0), 0);
+        const netProfit = totalSales - totalExpenses;
+        const validOrders = orders.filter(o => o.status !== 'cancelado');
+
+        $('dash-summary').innerHTML = `
+            <div class="dash-summary-card">
+                <div class="dash-summary-icon green"><i class="fas fa-dollar-sign"></i></div>
+                <div class="dash-summary-info">
+                    <span>Total Ventas</span>
+                    <div class="dash-summary-value">$${totalSales.toFixed(2)}</div>
+                </div>
+            </div>
+            <div class="dash-summary-card">
+                <div class="dash-summary-icon red"><i class="fas fa-arrow-down"></i></div>
+                <div class="dash-summary-info">
+                    <span>Total Gastos</span>
+                    <div class="dash-summary-value">$${totalExpenses.toFixed(2)}</div>
+                </div>
+            </div>
+            <div class="dash-summary-card">
+                <div class="dash-summary-icon accent"><i class="fas fa-chart-line"></i></div>
+                <div class="dash-summary-info">
+                    <span>Ganancia Neta</span>
+                    <div class="dash-summary-value" style="color:${netProfit >= 0 ? '#00e096' : '#ff4757'}">$${netProfit.toFixed(2)}</div>
+                </div>
+            </div>
+            <div class="dash-summary-card">
+                <div class="dash-summary-icon blue"><i class="fas fa-receipt"></i></div>
+                <div class="dash-summary-info">
+                    <span># Pedidos</span>
+                    <div class="dash-summary-value">${validOrders.length}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderDashPayments(sales) {
+        const methods = {};
+        sales.forEach(sale => {
+            const method = sale.paymentMethod || 'Efectivo';
+            methods[method] = (methods[method] || 0) + (sale.total || 0);
+        });
+
+        const total = Object.values(methods).reduce((s, v) => s + v, 0) || 1;
+        const methodColors = { 'Efectivo': 'cash', 'Yappy': 'yappy', 'Tarjeta': 'card' };
+        const methodIcons = { 'Efectivo': 'fa-money-bill-wave', 'Yappy': 'fa-mobile-alt', 'Tarjeta': 'fa-credit-card' };
+
+        const content = $('dash-payments-content');
+        if (Object.keys(methods).length === 0) {
+            content.innerHTML = '<p style="opacity:.5;text-align:center;padding:20px">Sin ventas este mes</p>';
+            return;
+        }
+
+        content.innerHTML = Object.entries(methods).map(([method, amount]) => {
+            const pct = Math.round((amount / total) * 100);
+            const colorClass = methodColors[method] || 'cash';
+            return `
+            <div class="dash-payment-row">
+                <div style="display:flex;align-items:center;gap:8px;min-width:100px">
+                    <i class="fas ${methodIcons[method] || 'fa-money-bill-wave'}" style="opacity:.6"></i>
+                    <span>${method}</span>
+                </div>
+                <div class="dash-payment-bar-bg">
+                    <div class="dash-payment-bar-fill ${colorClass}" style="width:${pct}%"></div>
+                </div>
+                <span style="min-width:80px;text-align:right;font-weight:600">$${amount.toFixed(2)}</span>
+            </div>`;
+        }).join('');
+    }
+
+    function renderDashTopProducts(sales) {
+        const products = {};
+        sales.forEach(sale => {
+            (sale.items || []).forEach(item => {
+                const key = item.name || 'Desconocido';
+                if (!products[key]) products[key] = { name: key, emoji: item.emoji || '', qty: 0, total: 0 };
+                products[key].qty += item.qty || 1;
+                products[key].total += item.total || item.price || 0;
+            });
+        });
+
+        const sorted = Object.values(products).sort((a, b) => b.total - a.total).slice(0, 5);
+        const content = $('dash-top-content');
+
+        if (!sorted.length) {
+            content.innerHTML = '<p style="opacity:.5;text-align:center;padding:20px">Sin datos este mes</p>';
+            return;
+        }
+
+        content.innerHTML = sorted.map((p, idx) => `
+            <div class="dash-top-item">
+                <span class="dash-top-rank">${idx + 1}</span>
+                <span style="flex:1">${p.emoji} ${p.name}</span>
+                <span style="opacity:.6;margin-right:12px">${p.qty} uds</span>
+                <span style="font-weight:700;color:var(--accent)">$${p.total.toFixed(2)}</span>
+            </div>
+        `).join('');
+    }
+
+    function renderDashRecent(orders, expenses) {
+        const content = $('dash-recent-content');
+        // Combine and sort by date
+        const timeline = [];
+
+        orders.slice(0, 5).forEach(o => {
+            const date = o.createdAt ? new Date(o.createdAt.seconds * 1000) : new Date();
+            timeline.push({
+                type: 'order',
+                date,
+                text: `Pedido ${o.number || o.id} — $${(o.total || 0).toFixed(2)}`,
+                status: o.status,
+                icon: 'fa-shopping-bag',
+                color: o.status === 'cancelado' ? '#ff4757' : '#00e096'
+            });
+        });
+
+        expenses.slice(0, 5).forEach(e => {
+            const date = e.createdAt ? new Date(e.createdAt.seconds * 1000) : new Date(e.date + 'T12:00:00');
+            timeline.push({
+                type: 'expense',
+                date,
+                text: `${e.description} — $${(e.amount || 0).toFixed(2)}`,
+                status: e.category,
+                icon: 'fa-file-invoice-dollar',
+                color: '#ff4757'
+            });
+        });
+
+        timeline.sort((a, b) => b.date - a.date);
+
+        if (!timeline.length) {
+            content.innerHTML = '<p style="opacity:.5;text-align:center;padding:20px">Sin actividad este mes</p>';
+            return;
+        }
+
+        content.innerHTML = timeline.slice(0, 10).map(item => `
+            <div class="dash-timeline-item">
+                <div class="dash-timeline-icon" style="background:${item.color}22;color:${item.color}"><i class="fas ${item.icon}"></i></div>
+                <div style="flex:1">
+                    <div>${item.text}</div>
+                    <div style="font-size:11px;opacity:.5">${item.date.toLocaleString('es-PA')}</div>
+                </div>
+                <span class="order-status status-${item.status}" style="font-size:10px">${item.status}</span>
+            </div>
+        `).join('');
+    }
 
     // ========================================
     // TOAST
