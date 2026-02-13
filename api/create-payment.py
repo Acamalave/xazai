@@ -20,7 +20,7 @@ from http.server import BaseHTTPRequestHandler
 YAPPY_CONFIG = {
     "merchantId": "17e73b4c-ed59-4d8a-a5ec-623c4a7a4e07",
     "secretToken": "WVBfRjc2MjFBQ0UtOEY2OS0zRkY1LUE3NkEtMDE5OEU5MUI4QUI1LjE3ZTczYjRjLWVkNTktNGQ4YS1hNWVjLTYyM2M0YTdhNGUwNw==",
-    "sandbox": "yes",  # Cambiar a "no" para produccion
+    "sandbox": "no",  # Produccion activa
 }
 
 YAPPY_API_URL = "https://pagosbg.bgeneral.com/validateapikeymerchand"
