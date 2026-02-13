@@ -28,6 +28,7 @@
                 <button class="tab" data-category="shots"><i class="fas fa-fire-flame-curved"></i> Shots</button>
                 <button class="tab" data-category="cafe"><i class="fas fa-mug-hot"></i> Café</button>
                 <button class="tab" data-category="bebidas"><i class="fas fa-bottle-water"></i> Bebidas</button>
+                <button class="tab tab-mis-pedidos hidden" data-category="mis-pedidos" id="tab-mis-pedidos"><i class="fas fa-receipt"></i> Mis Pedidos</button>
                 <button class="tab tab-highlight" data-category="arma-tu-bowl"><i class="fas fa-wand-magic-sparkles"></i> Arma tu Bowl</button>
             </div>
         </div>
@@ -100,6 +101,26 @@
                 <button class="btn-add-build" id="btn-add-build" disabled>
                     <i class="fas fa-cart-plus"></i> Agregar al Carrito
                 </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- MIS PEDIDOS SECTION - Customer Order Tracking -->
+    <section class="mis-pedidos-section hidden" id="mis-pedidos-section">
+        <div class="section-header">
+            <h2><i class="fas fa-receipt"></i> Mis Pedidos</h2>
+            <p>Seguimiento en tiempo real de tus pedidos</p>
+        </div>
+        <div id="mis-pedidos-active">
+            <h3 class="mp-subtitle"><i class="fas fa-clock"></i> Pedidos Activos</h3>
+            <div id="mis-pedidos-active-list">
+                <p class="mp-empty"><i class="fas fa-inbox"></i> No tienes pedidos activos</p>
+            </div>
+        </div>
+        <div id="mis-pedidos-history">
+            <h3 class="mp-subtitle"><i class="fas fa-history"></i> Historial</h3>
+            <div id="mis-pedidos-history-list">
+                <p class="mp-empty">No tienes pedidos anteriores</p>
             </div>
         </div>
     </section>

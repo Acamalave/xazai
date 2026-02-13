@@ -4249,3 +4249,384 @@ body {
     .btn-card-add { padding: 6px 12px; font-size: 10px; }
     .tab { padding: 6px 10px; font-size: 10px; }
 }
+
+/* ========================================
+   REORDER SECTION - "Volver a comprar"
+   ======================================== */
+.reorder-section {
+    margin-bottom: 28px;
+    padding: 0 4px;
+}
+
+.reorder-header {
+    margin-bottom: 14px;
+}
+
+.reorder-header h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-white);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.reorder-header h3 i {
+    color: var(--accent);
+    font-size: 16px;
+}
+
+.reorder-header p {
+    font-size: 12px;
+    color: var(--text-light);
+    margin-top: 2px;
+}
+
+.reorder-scroll {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 8px;
+}
+
+.reorder-scroll::-webkit-scrollbar { display: none; }
+
+.reorder-card {
+    min-width: 140px;
+    max-width: 140px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    cursor: pointer;
+    transition: var(--transition);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.reorder-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 16px rgba(233, 30, 140, 0.2);
+    transform: translateY(-2px);
+}
+
+.reorder-card-img {
+    width: 100%;
+    height: 90px;
+    background: linear-gradient(135deg, #1a0a2e, #2d1040);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.reorder-card-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.reorder-emoji {
+    font-size: 36px;
+}
+
+.reorder-card-info {
+    padding: 8px 10px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.reorder-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-white);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.reorder-price {
+    font-size: 11px;
+    color: var(--accent-soft);
+    font-weight: 600;
+}
+
+.reorder-add-btn {
+    margin: 4px 10px 8px;
+    padding: 6px;
+    background: var(--gradient-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    font-family: 'Poppins', sans-serif;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.reorder-add-btn:hover {
+    opacity: 0.85;
+    transform: scale(1.02);
+}
+
+/* ========================================
+   MIS PEDIDOS - Customer Order Tracking
+   ======================================== */
+.mis-pedidos-section {
+    padding: 48px 36px;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding-bottom: 120px;
+}
+
+.mis-pedidos-section .section-header {
+    margin-bottom: 28px;
+}
+
+.mis-pedidos-section .section-header h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-white);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mis-pedidos-section .section-header h2 i {
+    color: var(--accent);
+}
+
+.mis-pedidos-section .section-header p {
+    font-size: 13px;
+    color: var(--text-light);
+    margin-top: 4px;
+}
+
+.mp-subtitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-white);
+    margin: 24px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mp-subtitle i {
+    color: var(--accent-soft);
+    font-size: 14px;
+}
+
+.mp-empty {
+    text-align: center;
+    color: var(--text-light);
+    padding: 32px 20px;
+    font-size: 13px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border: 1px dashed var(--border);
+}
+
+.mp-empty i {
+    margin-right: 6px;
+    color: var(--accent-soft);
+}
+
+/* Order Card */
+.mp-order-card {
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    margin-bottom: 14px;
+    transition: var(--transition);
+}
+
+.mp-order-card.mp-active {
+    border-color: rgba(168, 85, 199, 0.3);
+    box-shadow: 0 2px 12px rgba(123, 45, 142, 0.1);
+}
+
+.mp-order-card.mp-cancelled {
+    opacity: 0.6;
+    border-color: rgba(255, 71, 87, 0.3);
+}
+
+.mp-order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.mp-order-number {
+    font-size: 15px;
+    color: var(--accent-soft);
+    font-weight: 700;
+}
+
+.mp-order-date {
+    font-size: 11px;
+    color: var(--text-light);
+    margin-left: 10px;
+}
+
+.mp-order-items {
+    font-size: 13px;
+    color: var(--text-light);
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.mp-order-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.mp-order-total {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-white);
+}
+
+.mp-cancel-reason {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #ff4757;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: rgba(255, 71, 87, 0.08);
+    border-radius: var(--radius-xs);
+}
+
+/* Status Stepper */
+.mp-stepper {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding: 14px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: var(--radius-sm);
+}
+
+.mp-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    z-index: 1;
+}
+
+.mp-step-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: var(--transition);
+}
+
+.mp-step.pending .mp-step-icon {
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-light);
+    border: 2px solid var(--border);
+}
+
+.mp-step.active .mp-step-icon {
+    background: var(--gradient-primary);
+    color: white;
+    border: 2px solid var(--accent);
+    box-shadow: 0 0 16px rgba(233, 30, 140, 0.5);
+    animation: pulse-step 2s ease-in-out infinite;
+}
+
+.mp-step.completed .mp-step-icon {
+    background: rgba(92, 184, 92, 0.15);
+    color: #5cb85c;
+    border: 2px solid #5cb85c;
+}
+
+@keyframes pulse-step {
+    0%, 100% { box-shadow: 0 0 8px rgba(233, 30, 140, 0.3); }
+    50% { box-shadow: 0 0 24px rgba(233, 30, 140, 0.7); }
+}
+
+.mp-step-label {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-light);
+    white-space: nowrap;
+}
+
+.mp-step.active .mp-step-label {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.mp-step.completed .mp-step-label {
+    color: #5cb85c;
+    font-weight: 600;
+}
+
+.mp-step-line {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    margin: 0 4px;
+    margin-top: 19px;
+    transition: background 0.4s ease;
+}
+
+.mp-step-line.completed {
+    background: linear-gradient(90deg, #5cb85c, #7dd87d);
+}
+
+/* Tab styling for Mis Pedidos */
+.tab-mis-pedidos:not(.hidden) {
+    display: flex;
+}
+
+/* ========================================
+   MIS PEDIDOS & REORDER RESPONSIVE
+   ======================================== */
+@media (max-width: 768px) {
+    .mis-pedidos-section { padding: 20px 14px; padding-bottom: 120px; }
+    .mis-pedidos-section .section-header h2 { font-size: 19px; }
+    .mp-step-icon { width: 32px; height: 32px; font-size: 12px; }
+    .mp-step-label { font-size: 9px; }
+    .mp-step-line { margin-top: 16px; }
+    .mp-order-card { padding: 14px 16px; }
+    .reorder-card { min-width: 130px; max-width: 130px; }
+    .reorder-card-img { height: 80px; }
+}
+
+@media (max-width: 480px) {
+    .mis-pedidos-section { padding: 16px 10px; padding-bottom: 110px; }
+    .mp-stepper { padding: 10px 4px; }
+    .mp-step-icon { width: 28px; height: 28px; font-size: 11px; }
+    .mp-step-label { font-size: 8px; }
+    .mp-step-line { margin-top: 14px; }
+    .mp-order-number { font-size: 13px; }
+    .reorder-card { min-width: 120px; max-width: 120px; }
+    .reorder-card-img { height: 72px; }
+    .reorder-emoji { font-size: 30px; }
+    .reorder-name { font-size: 11px; }
+}

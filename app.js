@@ -94,6 +94,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Tip amount
     let currentTip = 0;
 
+    // Customer order tracking state
+    let customerOrderHistory = [];
+    let customerOrdersUnsubscribe = null;
+    let customerActiveOrders = [];
+    let customerPastOrders = [];
+
+    // DOM - Mis Pedidos
+    const misPedidosSection = $('mis-pedidos-section');
+    const tabMisPedidos = $('tab-mis-pedidos');
+
     // ========================================
     // BUSINESS HOURS & STATUS
     // ========================================
@@ -327,6 +337,30 @@ document.addEventListener('DOMContentLoaded', function() {
     renderCategory('inicio');
     updateCartUI();
 
+    // Restore persisted user session
+    const savedUser = localStorage.getItem('xazai_user');
+    if (savedUser) {
+        try {
+            currentUser = JSON.parse(savedUser);
+            userName.textContent = currentUser.name || 'Mi Cuenta';
+            loginTriggerBtn.classList.add('hidden');
+            logoutBtn.classList.remove('hidden');
+            if (currentUser.role === 'admin') adminPanelBtn.classList.remove('hidden');
+            // Show customer features if has phone
+            if (currentUser.phone && currentUser.role !== 'admin') {
+                showMisPedidosTab();
+                loadCustomerOrderHistory(currentUser.phone).then(() => {
+                    const activeTab = document.querySelector('.tab.active');
+                    if (activeTab && activeTab.dataset.category === 'inicio') {
+                        renderAllProducts();
+                    }
+                });
+            }
+        } catch(e) {
+            localStorage.removeItem('xazai_user');
+        }
+    }
+
     // ========================================
     // AUTH (only at checkout or voluntary)
     // ========================================
@@ -343,12 +377,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
     logoutBtn.addEventListener('click', () => {
         currentUser = null;
+        customerOrderHistory = [];
+        customerActiveOrders = [];
+        customerPastOrders = [];
         userName.textContent = 'Mi Cuenta';
         adminPanelBtn.classList.add('hidden');
         logoutBtn.classList.add('hidden');
         loginTriggerBtn.classList.remove('hidden');
         userDropdown.classList.add('hidden');
+        localStorage.removeItem('xazai_user');
+        hideMisPedidosTab();
         showToast('Sesión cerrada', 'info');
+        // Re-render inicio to remove reorder section
+        const activeTab = document.querySelector('.tab.active');
+        if (activeTab && activeTab.dataset.category === 'inicio') {
+            renderAllProducts();
+        }
     });
 
     function openLoginModal() {
@@ -398,8 +442,24 @@ document.addEventListener('DOMContentLoaded', function() {
         loginTriggerBtn.classList.add('hidden');
         logoutBtn.classList.remove('hidden');
         if (currentUser.role === 'admin') adminPanelBtn.classList.remove('hidden');
+
+        // Persist user session
+        localStorage.setItem('xazai_user', JSON.stringify(currentUser));
+
         closeLoginModal();
         showToast(`Bienvenido, ${displayName}!`, 'success');
+
+        // Load customer features if has phone
+        if (currentUser.role !== 'admin' && currentUser.phone) {
+            showMisPedidosTab();
+            loadCustomerOrderHistory(currentUser.phone).then(() => {
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab && activeTab.dataset.category === 'inicio') {
+                    renderAllProducts();
+                }
+            });
+        }
+
         // If came from checkout, show payment modal
         if (cart.length > 0) showPaymentModal();
     });
@@ -409,9 +469,243 @@ document.addEventListener('DOMContentLoaded', function() {
         userName.textContent = 'Invitado';
         loginTriggerBtn.classList.add('hidden');
         logoutBtn.classList.remove('hidden');
+        localStorage.setItem('xazai_user', JSON.stringify(currentUser));
         closeLoginModal();
         if (cart.length > 0) showPaymentModal();
     });
+
+    // ========================================
+    // CUSTOMER ORDER HISTORY & "VOLVER A COMPRAR"
+    // ========================================
+    async function loadCustomerOrderHistory(phone) {
+        if (!phone || typeof db === 'undefined') return;
+        try {
+            const snapshot = await db.collection('orders')
+                .where('customerPhone', '==', phone)
+                .orderBy('createdAt', 'desc')
+                .limit(50)
+                .get();
+            customerOrderHistory = [];
+            snapshot.forEach(doc => {
+                customerOrderHistory.push({ id: doc.id, ...doc.data() });
+            });
+        } catch(err) {
+            console.error('Error loading order history:', err);
+        }
+    }
+
+    function getReorderProducts() {
+        const seen = new Set();
+        const reorderItems = [];
+        for (const order of customerOrderHistory) {
+            if (order.status === 'cancelado') continue;
+            for (const item of (order.items || [])) {
+                const menuItem = MENU_ITEMS.find(m => m.name === item.name);
+                if (menuItem && !seen.has(menuItem.id) && isProductAvailable(menuItem.id)) {
+                    seen.add(menuItem.id);
+                    reorderItems.push({ menuItem, lastSize: item.size || '' });
+                }
+                if (reorderItems.length >= 8) break;
+            }
+            if (reorderItems.length >= 8) break;
+        }
+        return reorderItems;
+    }
+
+    function buildReorderCardHTML(ri) {
+        const item = ri.menuItem;
+        const hasImage = item.image && item.image.length > 0;
+        return `
+            <div class="reorder-card" data-id="${item.id}">
+                <div class="reorder-card-img">
+                    ${hasImage
+                        ? `<img src="${item.image}" alt="${item.name}" loading="lazy">`
+                        : `<span class="reorder-emoji">${item.emoji}</span>`
+                    }
+                </div>
+                <div class="reorder-card-info">
+                    <span class="reorder-name">${item.name}</span>
+                    <span class="reorder-price">$${item.price.toFixed(2)}</span>
+                </div>
+                <button class="reorder-add-btn" data-id="${item.id}">
+                    <i class="fas fa-plus"></i> Agregar
+                </button>
+            </div>
+        `;
+    }
+
+    function bindReorderEvents() {
+        productsGrid.querySelectorAll('.reorder-add-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const productId = parseInt(btn.dataset.id);
+                const product = MENU_ITEMS.find(i => i.id === productId);
+                if (!product) return;
+                // Direct add for simple products (bebidas, shots, cafe)
+                const directCats = ['bebidas', 'shots', 'cafe'];
+                if (directCats.includes(product.category) || product.onlyGrande) {
+                    addDirectToCart(productId);
+                } else {
+                    // Scroll to the product card and expand it
+                    const cardEl = document.getElementById('card-' + productId);
+                    if (cardEl) {
+                        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        setTimeout(() => toggleExpand(productId), 400);
+                    } else {
+                        addDirectToCart(productId);
+                    }
+                }
+            });
+        });
+        productsGrid.querySelectorAll('.reorder-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.reorder-add-btn')) return;
+                const productId = parseInt(card.dataset.id);
+                const cardEl = document.getElementById('card-' + productId);
+                if (cardEl) {
+                    cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    setTimeout(() => toggleExpand(productId), 400);
+                }
+            });
+        });
+    }
+
+    // ========================================
+    // MIS PEDIDOS - Customer Order Tracking
+    // ========================================
+    function showMisPedidosTab() {
+        if (tabMisPedidos) tabMisPedidos.classList.remove('hidden');
+    }
+
+    function hideMisPedidosTab() {
+        if (tabMisPedidos) tabMisPedidos.classList.add('hidden');
+        if (misPedidosSection) misPedidosSection.classList.add('hidden');
+        if (customerOrdersUnsubscribe) {
+            customerOrdersUnsubscribe();
+            customerOrdersUnsubscribe = null;
+        }
+    }
+
+    function startCustomerOrdersListener(phone) {
+        if (customerOrdersUnsubscribe) customerOrdersUnsubscribe();
+        if (!phone || typeof db === 'undefined') return;
+
+        const ordersRef = db.collection('orders')
+            .where('customerPhone', '==', phone)
+            .orderBy('createdAt', 'desc')
+            .limit(20);
+
+        customerOrdersUnsubscribe = ordersRef.onSnapshot(snapshot => {
+            const allOrders = [];
+            snapshot.forEach(doc => {
+                allOrders.push({ id: doc.id, ...doc.data() });
+            });
+
+            customerActiveOrders = allOrders.filter(o =>
+                ['pendiente', 'preparando', 'listo'].includes(o.status)
+            );
+            customerPastOrders = allOrders.filter(o =>
+                ['entregado', 'cancelado'].includes(o.status)
+            );
+
+            renderMisPedidos();
+        }, err => {
+            console.error('Error listening to customer orders:', err);
+        });
+    }
+
+    function renderMisPedidos() {
+        const activeContainer = $('mis-pedidos-active-list');
+        const historyContainer = $('mis-pedidos-history-list');
+        if (!activeContainer || !historyContainer) return;
+
+        // Active orders
+        if (customerActiveOrders.length === 0) {
+            activeContainer.innerHTML = '<p class="mp-empty"><i class="fas fa-check-circle"></i> No tienes pedidos activos</p>';
+        } else {
+            activeContainer.innerHTML = customerActiveOrders.map(order =>
+                buildCustomerOrderCard(order, true)
+            ).join('');
+        }
+
+        // Past orders
+        if (customerPastOrders.length === 0) {
+            historyContainer.innerHTML = '<p class="mp-empty">Aún no tienes pedidos anteriores</p>';
+        } else {
+            historyContainer.innerHTML = customerPastOrders.map(order =>
+                buildCustomerOrderCard(order, false)
+            ).join('');
+        }
+    }
+
+    function buildCustomerOrderCard(order, isActive) {
+        const items = order.items || [];
+        let dateStr = '';
+        if (order.createdAt && order.createdAt.seconds) {
+            dateStr = new Date(order.createdAt.seconds * 1000).toLocaleString('es-PA', {
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        const isCancelled = order.status === 'cancelado';
+
+        // Status stepper for active orders
+        const steps = ['pendiente', 'preparando', 'listo', 'entregado'];
+        const stepLabels = ['Recibido', 'Preparando', 'Listo', 'Entregado'];
+        const stepIcons = ['fa-inbox', 'fa-fire-burner', 'fa-bell', 'fa-check-double'];
+        const currentStepIdx = steps.indexOf(order.status);
+
+        let stepperHTML = '';
+        if (isActive && !isCancelled) {
+            stepperHTML = `
+                <div class="mp-stepper">
+                    ${steps.map((step, idx) => {
+                        let cls = '';
+                        if (idx < currentStepIdx) cls = 'completed';
+                        else if (idx === currentStepIdx) cls = 'active';
+                        else cls = 'pending';
+                        return `
+                            <div class="mp-step ${cls}">
+                                <div class="mp-step-icon"><i class="fas ${stepIcons[idx]}"></i></div>
+                                <span class="mp-step-label">${stepLabels[idx]}</span>
+                            </div>
+                            ${idx < steps.length - 1 ? `<div class="mp-step-line ${idx < currentStepIdx ? 'completed' : ''}"></div>` : ''}
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        const statusLabels = {
+            pendiente: 'Recibido',
+            preparando: 'Preparando',
+            listo: 'Listo',
+            entregado: 'Entregado',
+            cancelado: 'Cancelado'
+        };
+
+        const itemsSummary = items.slice(0, 3).map(i =>
+            `${i.emoji || '📦'} ${i.name} x${i.qty || i.quantity || 1}`
+        ).join(' &middot; ') + (items.length > 3 ? ` +${items.length - 3} más` : '');
+
+        return `
+            <div class="mp-order-card ${isCancelled ? 'mp-cancelled' : ''} ${isActive ? 'mp-active' : ''}">
+                <div class="mp-order-header">
+                    <div>
+                        <strong class="mp-order-number">${order.number || ''}</strong>
+                        <span class="mp-order-date">${dateStr}</span>
+                    </div>
+                    <span class="order-status status-${order.status}">${statusLabels[order.status] || order.status}</span>
+                </div>
+                ${stepperHTML}
+                <div class="mp-order-items">${itemsSummary}</div>
+                <div class="mp-order-footer">
+                    <span class="mp-order-total">Total: $${(order.total || 0).toFixed(2)}</span>
+                </div>
+                ${isCancelled && order.cancelReason ? `<div class="mp-cancel-reason"><i class="fas fa-ban"></i> ${order.cancelReason}</div>` : ''}
+            </div>
+        `;
+    }
 
     // ========================================
     // CATEGORIES
@@ -427,13 +721,23 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderCategory(category) {
         expandedCardId = null;
 
-        if (category === 'arma-tu-bowl') {
+        if (category === 'mis-pedidos') {
+            menuSection.classList.add('hidden');
+            buildBowlSection.classList.add('hidden');
+            if (misPedidosSection) misPedidosSection.classList.remove('hidden');
+            // Start real-time listener if not running
+            if (currentUser && currentUser.phone && !customerOrdersUnsubscribe) {
+                startCustomerOrdersListener(currentUser.phone);
+            }
+        } else if (category === 'arma-tu-bowl') {
             menuSection.classList.add('hidden');
             buildBowlSection.classList.remove('hidden');
+            if (misPedidosSection) misPedidosSection.classList.add('hidden');
             renderBuildBowl();
         } else {
             menuSection.classList.remove('hidden');
             buildBowlSection.classList.add('hidden');
+            if (misPedidosSection) misPedidosSection.classList.add('hidden');
             if (category === 'inicio') {
                 renderAllProducts();
             } else {
@@ -448,6 +752,25 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderAllProducts() {
         const cats = ['bowls', 'smoothies', 'jugos', 'shots', 'cafe', 'bebidas'];
         let html = '';
+
+        // "Volver a comprar" section for returning customers
+        if (currentUser && currentUser.phone && customerOrderHistory.length > 0) {
+            const reorderItems = getReorderProducts();
+            if (reorderItems.length > 0) {
+                html += `
+                    <div class="reorder-section">
+                        <div class="reorder-header">
+                            <h3><i class="fas fa-clock-rotate-left"></i> Volver a comprar</h3>
+                            <p>Tus pedidos anteriores</p>
+                        </div>
+                        <div class="reorder-scroll">
+                            ${reorderItems.map(ri => buildReorderCardHTML(ri)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
         cats.forEach(catKey => {
             const cat = CATEGORIES[catKey];
             const items = MENU_ITEMS.filter(i => i.category === catKey && isProductAvailable(i.id));
@@ -470,6 +793,7 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
         productsGrid.innerHTML = html;
         bindAllCardEvents();
+        bindReorderEvents();
     }
 
     function buildCardHTML(item) {
@@ -1565,7 +1889,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     btnCheckout.addEventListener('click', handleCheckout);
     floatingCheckoutBtn.addEventListener('click', handleCheckout);
-    btnConfirmOk.addEventListener('click', () => confirmationOverlay.classList.add('hidden'));
+    btnConfirmOk.addEventListener('click', () => {
+        confirmationOverlay.classList.add('hidden');
+        // Navigate to "Mis Pedidos" after placing order (if logged in with phone)
+        if (currentUser && currentUser.phone && currentUser.role !== 'admin') {
+            showMisPedidosTab();
+            // Start listener if needed
+            if (!customerOrdersUnsubscribe) {
+                startCustomerOrdersListener(currentUser.phone);
+            }
+            // Also reload history for reorder section
+            loadCustomerOrderHistory(currentUser.phone);
+            // Switch to Mis Pedidos tab
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            if (tabMisPedidos) tabMisPedidos.classList.add('active');
+            renderCategory('mis-pedidos');
+        }
+    });
 
     // Payment modal events (delegated - elements created in HTML)
     document.addEventListener('click', (e) => {
