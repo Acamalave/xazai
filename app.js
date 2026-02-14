@@ -112,6 +112,19 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentRatingOrderId = null;
 
     // ========================================
+    // CASH REGISTER SOUND
+    // ========================================
+    const cashRegisterSound = new Audio('cash-register.mp3');
+    cashRegisterSound.volume = 0.7;
+
+    function playCashRegisterSound() {
+        try {
+            cashRegisterSound.currentTime = 0;
+            cashRegisterSound.play().catch(() => {});
+        } catch (e) { /* silent fail */ }
+    }
+
+    // ========================================
     // BUSINESS HOURS & STATUS
     // ========================================
     const BUSINESS_HOURS = {
@@ -2092,6 +2105,7 @@ document.addEventListener('DOMContentLoaded', function() {
             closePaymentModal();
             orderNumber.textContent = orderId;
             confirmationOverlay.classList.remove('hidden');
+            playCashRegisterSound();
             showToast('¡Pago confirmado con Yappy!', 'success');
 
             // Update Firestore: mark as paid
@@ -2265,6 +2279,7 @@ document.addEventListener('DOMContentLoaded', function() {
         closePaymentModal();
         if (!cartSidebar.classList.contains('hidden')) toggleCart();
         confirmationOverlay.classList.remove('hidden');
+        playCashRegisterSound();
     }
 
     btnCheckout.addEventListener('click', handleCheckout);
@@ -3026,6 +3041,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const discMsg = posDiscountPercent > 0 ? ` -${posDiscountPercent}%` : '';
             const tipMsg = posTipAmount > 0 ? ` + propina $${posTipAmount.toFixed(2)}` : '';
             showToast(`Venta registrada: $${total.toFixed(2)} (${posPaymentMethod}${discMsg}${tipMsg})`, 'success');
+            playCashRegisterSound();
             posCart = [];
             posTipAmount = 0;
             posDiscountPercent = 0;
