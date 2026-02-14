@@ -3918,19 +3918,22 @@ body {
     z-index: 10001 !important;
 }
 
-/* Style the Yappy dialog element to be centered and visible */
-#payment-modal.yappy-active dialog,
-#payment-modal.yappy-active app-dialog {
-    display: block !important;
+/* Override Yappy dialog's position:fixed so it respects flex centering */
+#payment-modal.yappy-active dialog {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    margin: 0 !important;
+    max-width: 500px !important;
+    width: 90vw !important;
+    border: none !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
+    overflow: visible !important;
 }
 
-#payment-modal.yappy-active .dialog-container {
-    background: #f5f5f5;
-    border-radius: 16px;
-    padding: 32px;
-    max-width: 500px;
-    width: 90vw;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+#payment-modal.yappy-active app-dialog {
+    display: block !important;
 }
 
 /* Ensure Yappy's backdrop covers screen */
