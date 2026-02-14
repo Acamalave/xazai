@@ -2136,12 +2136,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // Init new sections
         initExpenses();
         initDashboard();
+        initRRHH();
     }
 
     function exitAdminMode() {
         adminMode = false;
         // Stop listeners
         if (ordersUnsubscribe) { ordersUnsubscribe(); ordersUnsubscribe = null; }
+        stopRRHHClock();
         // Hide admin dashboard
         adminDashboard.classList.add('hidden');
         // Show client UI
@@ -2175,6 +2177,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load data for the section
         if (section === 'expenses') loadExpenses();
         if (section === 'dashboard') loadDashboard();
+        if (section === 'rrhh') { loadRRHHRoles(); loadRRHHCollaborators(); }
     });
 
     // Admin orders filter
@@ -3336,6 +3339,660 @@ document.addEventListener('DOMContentLoaded', function() {
                 <span class="order-status status-${item.status}" style="font-size:10px">${item.status}</span>
             </div>
         `).join('');
+    }
+
+    // ========================================
+    // RRHH - Recursos Humanos
+    // ========================================
+    const RRHH_PERMISSIONS = [
+        { key: 'gestionar_usuarios', label: 'Gestionar Usuarios', icon: 'fa-users-cog' },
+        { key: 'gestionar_roles', label: 'Gestionar Roles', icon: 'fa-user-shield' },
+        { key: 'ver_reportes', label: 'Ver Reportes', icon: 'fa-chart-bar' },
+        { key: 'registrar_asistencia', label: 'Registrar Asistencia', icon: 'fa-fingerprint' },
+        { key: 'ver_asistencia', label: 'Ver Asistencia', icon: 'fa-clipboard-list' },
+        { key: 'editar_colaboradores', label: 'Editar Colaboradores', icon: 'fa-user-edit' }
+    ];
+    const DEFAULT_ROLES = [
+        { name: 'Administrador', color: '#7b2d8e', permissions: ['gestionar_usuarios','gestionar_roles','ver_reportes','registrar_asistencia','ver_asistencia','editar_colaboradores'], isDefault: true },
+        { name: 'Supervisor', color: '#5bc0de', permissions: ['gestionar_usuarios','ver_reportes','registrar_asistencia','ver_asistencia'], isDefault: true },
+        { name: 'Colaborador', color: '#5cb85c', permissions: ['registrar_asistencia'], isDefault: true }
+    ];
+    let rrhhRoles = [];
+    let rrhhCollaborators = [];
+    let rrhhEditingRoleId = null;
+    let rrhhEditingCollabId = null;
+    let rrhhClockInterval = null;
+    let rrhhCameraStream = null;
+    let rrhhCameraMode = null;
+    let rrhhCameraTargetId = null;
+    let rrhhAttType = 'entrada';
+    let rrhhReportRange = 'today';
+
+    function initRRHH() {
+        seedDefaultRoles();
+        renderRolePermissions();
+
+        // Tab switching
+        document.querySelectorAll('.rrhh-tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.rrhh-tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const tab = btn.dataset.rrhhTab;
+                ['roles', 'colaboradores', 'asistencia', 'reportes'].forEach(t => {
+                    const el = $('rrhh-tab-' + t);
+                    if (el) el.classList.toggle('hidden', t !== tab);
+                });
+                if (tab === 'asistencia') startRRHHClock();
+                if (tab === 'reportes') loadRRHHReports();
+                if (tab !== 'asistencia') stopRRHHClock();
+            });
+        });
+
+        // Role save
+        $('rrhh-role-save-btn').addEventListener('click', saveRole);
+        // Collab save
+        $('rrhh-collab-save-btn').addEventListener('click', saveCollaborator);
+
+        // Attendance type buttons
+        document.querySelectorAll('.rrhh-att-type-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.rrhh-att-type-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                rrhhAttType = btn.dataset.attType;
+            });
+        });
+
+        // Attendance scan
+        $('rrhh-att-scan-btn').addEventListener('click', () => {
+            const collabId = $('rrhh-att-collaborator').value;
+            if (!collabId) { showToast('Selecciona un colaborador', 'warning'); return; }
+            openBiometricCapture(collabId, 'verify');
+        });
+        $('rrhh-att-collaborator').addEventListener('change', () => {
+            $('rrhh-att-scan-btn').disabled = !$('rrhh-att-collaborator').value;
+        });
+
+        // Camera modal
+        $('rrhh-camera-close').addEventListener('click', closeBiometricCamera);
+        $('rrhh-capture-btn').addEventListener('click', startBiometricCountdown);
+
+        // Confirmation overlay
+        $('rrhh-confirm-ok').addEventListener('click', () => {
+            $('rrhh-confirm-overlay').classList.add('hidden');
+        });
+
+        // Report range buttons
+        document.querySelectorAll('.rrhh-range-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.rrhh-range-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                rrhhReportRange = btn.dataset.rrhhRange;
+                if (rrhhReportRange === 'custom') {
+                    $('rrhh-report-custom').classList.remove('hidden');
+                } else {
+                    $('rrhh-report-custom').classList.add('hidden');
+                    loadRRHHReports();
+                }
+            });
+        });
+        const reportApply = $('rrhh-report-apply');
+        if (reportApply) reportApply.addEventListener('click', loadRRHHReports);
+
+        loadRRHHRoles();
+        loadRRHHCollaborators();
+    }
+
+    // --- Roles ---
+    function seedDefaultRoles() {
+        db.collection('rrhh_roles').limit(1).get().then(snap => {
+            if (snap.empty) {
+                DEFAULT_ROLES.forEach(role => {
+                    db.collection('rrhh_roles').add({ ...role, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+                });
+                setTimeout(() => loadRRHHRoles(), 1500);
+            }
+        });
+    }
+
+    function renderRolePermissions() {
+        const container = $('rrhh-role-permissions');
+        if (!container) return;
+        container.innerHTML = RRHH_PERMISSIONS.map(p => `
+            <div class="rrhh-perm-item" data-perm="${p.key}">
+                <input type="checkbox" value="${p.key}">
+                <i class="fas ${p.icon}"></i>
+                <span>${p.label}</span>
+            </div>
+        `).join('');
+        container.querySelectorAll('.rrhh-perm-item').forEach(item => {
+            item.addEventListener('click', () => {
+                item.classList.toggle('active');
+                item.querySelector('input').checked = item.classList.contains('active');
+            });
+        });
+    }
+
+    function loadRRHHRoles() {
+        db.collection('rrhh_roles').orderBy('createdAt', 'asc').get().then(snap => {
+            rrhhRoles = [];
+            snap.forEach(doc => rrhhRoles.push({ id: doc.id, ...doc.data() }));
+            renderRoles();
+            populateRoleSelects();
+        });
+    }
+
+    function renderRoles() {
+        const container = $('rrhh-roles-list');
+        if (!container) return;
+        if (!rrhhRoles.length) { container.innerHTML = '<p class="rrhh-empty">No hay roles creados</p>'; return; }
+        container.innerHTML = rrhhRoles.map(role => `
+            <div class="rrhh-role-card" style="--role-color: ${role.color}">
+                <div class="rrhh-role-header">
+                    <span class="rrhh-role-name">${role.name}</span>
+                    <span class="rrhh-role-badge" style="background: ${role.color}">${role.name}</span>
+                </div>
+                <div class="rrhh-role-perms">
+                    ${(role.permissions || []).map(p => {
+                        const perm = RRHH_PERMISSIONS.find(pp => pp.key === p);
+                        return perm ? `<span class="rrhh-role-perm-tag">${perm.label}</span>` : '';
+                    }).join('')}
+                </div>
+                <div class="rrhh-role-actions">
+                    <button class="rrhh-btn-edit" data-role-edit="${role.id}"><i class="fas fa-edit"></i> Editar</button>
+                    ${!role.isDefault ? `<button class="rrhh-btn-delete" data-role-delete="${role.id}"><i class="fas fa-trash"></i> Eliminar</button>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function saveRole() {
+        const name = $('rrhh-role-name').value.trim();
+        const color = $('rrhh-role-color').value;
+        const permissions = [];
+        $('rrhh-role-permissions').querySelectorAll('.rrhh-perm-item.active').forEach(item => {
+            permissions.push(item.dataset.perm);
+        });
+        if (!name) { showToast('Ingresa el nombre del rol', 'warning'); return; }
+        if (!permissions.length) { showToast('Selecciona al menos un permiso', 'warning'); return; }
+        const data = { name, color, permissions };
+        $('rrhh-role-save-btn').disabled = true;
+        if (rrhhEditingRoleId) {
+            db.collection('rrhh_roles').doc(rrhhEditingRoleId).update(data).then(() => {
+                showToast('Rol actualizado', 'success');
+                resetRoleForm(); loadRRHHRoles();
+            }).catch(() => { showToast('Error actualizando rol', 'warning'); $('rrhh-role-save-btn').disabled = false; });
+        } else {
+            data.isDefault = false;
+            data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            db.collection('rrhh_roles').add(data).then(() => {
+                showToast('Rol creado', 'success');
+                resetRoleForm(); loadRRHHRoles();
+            }).catch(() => { showToast('Error creando rol', 'warning'); $('rrhh-role-save-btn').disabled = false; });
+        }
+    }
+
+    function resetRoleForm() {
+        rrhhEditingRoleId = null;
+        $('rrhh-role-name').value = '';
+        $('rrhh-role-color').value = '#7b2d8e';
+        $('rrhh-role-permissions').querySelectorAll('.rrhh-perm-item').forEach(item => {
+            item.classList.remove('active');
+            item.querySelector('input').checked = false;
+        });
+        $('rrhh-role-save-btn').disabled = false;
+        $('rrhh-role-save-btn').innerHTML = '<i class="fas fa-save"></i> Guardar Rol';
+        $('rrhh-role-form-title').textContent = 'Nuevo Rol';
+    }
+
+    function populateRoleSelects() {
+        const options = rrhhRoles.map(r => `<option value="${r.id}" data-color="${r.color}">${r.name}</option>`).join('');
+        const collabSelect = $('rrhh-collab-role');
+        if (collabSelect) collabSelect.innerHTML = '<option value="">Seleccionar rol...</option>' + options;
+    }
+
+    // Delegated: role edit/delete
+    document.addEventListener('click', (e) => {
+        const editBtn = e.target.closest('[data-role-edit]');
+        if (editBtn) {
+            const role = rrhhRoles.find(r => r.id === editBtn.dataset.roleEdit);
+            if (!role) return;
+            rrhhEditingRoleId = role.id;
+            $('rrhh-role-name').value = role.name;
+            $('rrhh-role-color').value = role.color;
+            $('rrhh-role-permissions').querySelectorAll('.rrhh-perm-item').forEach(item => {
+                const isActive = (role.permissions || []).includes(item.dataset.perm);
+                item.classList.toggle('active', isActive);
+                item.querySelector('input').checked = isActive;
+            });
+            $('rrhh-role-save-btn').innerHTML = '<i class="fas fa-save"></i> Actualizar Rol';
+            $('rrhh-role-form-title').textContent = 'Editar Rol';
+            $('rrhh-tab-roles').scrollIntoView({ behavior: 'smooth' });
+        }
+        const deleteBtn = e.target.closest('[data-role-delete]');
+        if (deleteBtn) {
+            if (!confirm('¿Eliminar este rol?')) return;
+            db.collection('rrhh_roles').doc(deleteBtn.dataset.roleDelete).delete().then(() => {
+                showToast('Rol eliminado', 'success'); loadRRHHRoles();
+            });
+        }
+    });
+
+    // --- Collaborators ---
+    function loadRRHHCollaborators() {
+        db.collection('rrhh_collaborators').where('active', '==', true).orderBy('createdAt', 'desc').get().then(snap => {
+            rrhhCollaborators = [];
+            snap.forEach(doc => rrhhCollaborators.push({ id: doc.id, ...doc.data() }));
+            renderCollaborators();
+            populateAttendanceSelect();
+        }).catch(() => {
+            // Index might not exist yet, try without ordering
+            db.collection('rrhh_collaborators').get().then(snap => {
+                rrhhCollaborators = [];
+                snap.forEach(doc => { const d = doc.data(); if (d.active !== false) rrhhCollaborators.push({ id: doc.id, ...d }); });
+                renderCollaborators();
+                populateAttendanceSelect();
+            });
+        });
+    }
+
+    function renderCollaborators() {
+        const pending = rrhhCollaborators.filter(c => !c.biometricPhoto);
+        const registered = rrhhCollaborators.filter(c => c.biometricPhoto);
+        const pendSection = $('rrhh-pendientes-section');
+        const pendList = $('rrhh-pendientes-list');
+        if (pending.length) {
+            pendSection.classList.remove('hidden');
+            pendList.innerHTML = pending.map(c => renderCollabCard(c, true)).join('');
+        } else {
+            pendSection.classList.add('hidden');
+        }
+        const listContainer = $('rrhh-collabs-list');
+        if (registered.length) {
+            listContainer.innerHTML = registered.map(c => renderCollabCard(c, false)).join('');
+        } else {
+            listContainer.innerHTML = '<p class="rrhh-empty">No hay colaboradores con biometría registrada</p>';
+        }
+    }
+
+    function renderCollabCard(collab, isPending) {
+        const avatar = collab.biometricPhoto
+            ? `<img src="${collab.biometricPhoto}" alt="${collab.name}">`
+            : `<i class="fas fa-user"></i>`;
+        const bioBtn = isPending
+            ? `<button class="rrhh-bio-btn" data-collab-bio="${collab.id}"><i class="fas fa-camera"></i> Registrar Biometría</button>`
+            : `<button class="rrhh-bio-btn registered"><i class="fas fa-check-circle"></i> Registrada</button>`;
+        return `
+            <div class="rrhh-collab-card">
+                <div class="rrhh-collab-avatar">${avatar}</div>
+                <div class="rrhh-collab-info">
+                    <div class="rrhh-collab-name">${collab.name}</div>
+                    <div class="rrhh-collab-detail">${collab.cedula || ''} · ${collab.phone || ''}</div>
+                    <span class="rrhh-role-badge" style="background:${collab.roleColor};font-size:10px;padding:2px 8px;margin-top:4px;display:inline-block">${collab.roleName}</span>
+                </div>
+                <div class="rrhh-collab-actions">
+                    ${bioBtn}
+                    <button class="rrhh-btn-edit" data-collab-edit="${collab.id}" style="font-size:10px;padding:4px 8px"><i class="fas fa-edit"></i></button>
+                </div>
+            </div>`;
+    }
+
+    function saveCollaborator() {
+        const name = $('rrhh-collab-name').value.trim();
+        const cedula = $('rrhh-collab-cedula').value.trim();
+        const phone = $('rrhh-collab-phone').value.trim();
+        const roleId = $('rrhh-collab-role').value;
+        if (!name || !roleId) { showToast('Completa nombre y rol', 'warning'); return; }
+        const role = rrhhRoles.find(r => r.id === roleId);
+        if (!role) { showToast('Rol inválido', 'warning'); return; }
+        const data = { name, cedula, phone, roleId, roleName: role.name, roleColor: role.color, active: true };
+        $('rrhh-collab-save-btn').disabled = true;
+        if (rrhhEditingCollabId) {
+            db.collection('rrhh_collaborators').doc(rrhhEditingCollabId).update(data).then(() => {
+                showToast('Colaborador actualizado', 'success');
+                resetCollabForm(); loadRRHHCollaborators();
+            }).catch(() => { showToast('Error actualizando', 'warning'); $('rrhh-collab-save-btn').disabled = false; });
+        } else {
+            data.biometricPhoto = '';
+            data.biometricDate = null;
+            data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            db.collection('rrhh_collaborators').add(data).then(() => {
+                showToast('Colaborador agregado', 'success');
+                resetCollabForm(); loadRRHHCollaborators();
+            }).catch(() => { showToast('Error agregando', 'warning'); $('rrhh-collab-save-btn').disabled = false; });
+        }
+    }
+
+    function resetCollabForm() {
+        rrhhEditingCollabId = null;
+        $('rrhh-collab-name').value = '';
+        $('rrhh-collab-cedula').value = '';
+        $('rrhh-collab-phone').value = '';
+        $('rrhh-collab-role').selectedIndex = 0;
+        $('rrhh-collab-save-btn').disabled = false;
+        $('rrhh-collab-save-btn').innerHTML = '<i class="fas fa-save"></i> Guardar Colaborador';
+        $('rrhh-collab-form-title').textContent = 'Nuevo Colaborador';
+    }
+
+    function populateAttendanceSelect() {
+        const withBio = rrhhCollaborators.filter(c => c.biometricPhoto);
+        const select = $('rrhh-att-collaborator');
+        if (select) {
+            select.innerHTML = '<option value="">Seleccionar colaborador...</option>' +
+                withBio.map(c => `<option value="${c.id}">${c.name} (${c.roleName})</option>`).join('');
+        }
+        const scanBtn = $('rrhh-att-scan-btn');
+        if (scanBtn) scanBtn.disabled = true;
+    }
+
+    // Delegated: bio register + collab edit
+    document.addEventListener('click', (e) => {
+        const bioBtn = e.target.closest('[data-collab-bio]');
+        if (bioBtn) { openBiometricCapture(bioBtn.dataset.collabBio, 'register'); }
+
+        const editCollabBtn = e.target.closest('[data-collab-edit]');
+        if (editCollabBtn) {
+            const collab = rrhhCollaborators.find(c => c.id === editCollabBtn.dataset.collabEdit);
+            if (!collab) return;
+            rrhhEditingCollabId = collab.id;
+            $('rrhh-collab-name').value = collab.name;
+            $('rrhh-collab-cedula').value = collab.cedula || '';
+            $('rrhh-collab-phone').value = collab.phone || '';
+            $('rrhh-collab-role').value = collab.roleId;
+            $('rrhh-collab-save-btn').innerHTML = '<i class="fas fa-save"></i> Actualizar Colaborador';
+            $('rrhh-collab-form-title').textContent = 'Editar Colaborador';
+            document.querySelectorAll('.rrhh-tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('[data-rrhh-tab="colaboradores"]').classList.add('active');
+            ['roles','colaboradores','asistencia','reportes'].forEach(t => {
+                const el = $('rrhh-tab-' + t);
+                if (el) el.classList.toggle('hidden', t !== 'colaboradores');
+            });
+        }
+    });
+
+    // --- Camera / Biometric Flow ---
+    function openBiometricCapture(collaboratorId, mode) {
+        rrhhCameraMode = mode;
+        rrhhCameraTargetId = collaboratorId;
+        const collab = rrhhCollaborators.find(c => c.id === collaboratorId);
+        if (!collab) return;
+        if (mode === 'register') {
+            $('rrhh-camera-title').textContent = 'Registro Biométrico';
+            $('rrhh-camera-subtitle').textContent = `Capturando rostro de ${collab.name}`;
+            $('rrhh-capture-btn').innerHTML = '<i class="fas fa-camera"></i> Capturar';
+        } else {
+            $('rrhh-camera-title').textContent = 'Verificación Biométrica';
+            $('rrhh-camera-subtitle').textContent = `Verificando ${collab.name} — ${rrhhAttType === 'entrada' ? 'Entrada' : 'Salida'}`;
+            $('rrhh-capture-btn').innerHTML = '<i class="fas fa-fingerprint"></i> Verificar';
+        }
+        $('rrhh-countdown').classList.add('hidden');
+        $('rrhh-scan-line').classList.add('hidden');
+        $('rrhh-scan-result').classList.add('hidden');
+        $('rrhh-capture-btn').disabled = false;
+        $('rrhh-camera-modal').classList.remove('hidden');
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } }).then(stream => {
+            rrhhCameraStream = stream;
+            const video = $('rrhh-camera-video');
+            video.srcObject = stream;
+            video.play();
+        }).catch(() => {
+            showToast('No se pudo acceder a la cámara', 'warning');
+            closeBiometricCamera();
+        });
+    }
+
+    function closeBiometricCamera() {
+        $('rrhh-camera-modal').classList.add('hidden');
+        if (rrhhCameraStream) {
+            rrhhCameraStream.getTracks().forEach(track => track.stop());
+            rrhhCameraStream = null;
+        }
+        const video = $('rrhh-camera-video');
+        if (video) video.srcObject = null;
+    }
+
+    function startBiometricCountdown() {
+        $('rrhh-capture-btn').disabled = true;
+        const countdown = $('rrhh-countdown');
+        const numberEl = $('rrhh-countdown-number');
+        countdown.classList.remove('hidden');
+        let count = 3;
+        numberEl.textContent = count;
+        const countInterval = setInterval(() => {
+            count--;
+            if (count > 0) {
+                numberEl.textContent = count;
+                numberEl.style.animation = 'none';
+                void numberEl.offsetHeight;
+                numberEl.style.animation = '';
+            } else {
+                clearInterval(countInterval);
+                countdown.classList.add('hidden');
+                performBiometricScan();
+            }
+        }, 1000);
+    }
+
+    function performBiometricScan() {
+        const scanLine = $('rrhh-scan-line');
+        scanLine.classList.remove('hidden');
+        scanLine.style.animation = 'none';
+        void scanLine.offsetHeight;
+        scanLine.style.animation = '';
+        setTimeout(() => {
+            scanLine.classList.add('hidden');
+            const video = $('rrhh-camera-video');
+            const canvas = $('rrhh-camera-canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const maxSize = 800;
+            let w = canvas.width, h = canvas.height;
+            if (w > maxSize || h > maxSize) {
+                if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                else { w = Math.round(w * maxSize / h); h = maxSize; }
+            }
+            const resized = document.createElement('canvas');
+            resized.width = w; resized.height = h;
+            resized.getContext('2d').drawImage(canvas, 0, 0, w, h);
+            const base64 = resized.toDataURL('image/jpeg', 0.7);
+            const result = $('rrhh-scan-result');
+            result.classList.remove('hidden');
+            if (rrhhCameraMode === 'register') {
+                $('rrhh-scan-result-text').textContent = 'Rostro Capturado';
+                db.collection('rrhh_collaborators').doc(rrhhCameraTargetId).update({
+                    biometricPhoto: base64,
+                    biometricDate: firebase.firestore.FieldValue.serverTimestamp()
+                }).then(() => {
+                    setTimeout(() => {
+                        closeBiometricCamera();
+                        showToast('Biometría registrada correctamente', 'success');
+                        loadRRHHCollaborators();
+                    }, 1500);
+                });
+            } else {
+                $('rrhh-scan-result-text').textContent = 'Identidad Verificada';
+                setTimeout(() => {
+                    closeBiometricCamera();
+                    recordAttendance(rrhhCameraTargetId, base64);
+                }, 1500);
+            }
+        }, 2000);
+    }
+
+    // --- Attendance ---
+    function recordAttendance(collaboratorId, photo) {
+        const collab = rrhhCollaborators.find(c => c.id === collaboratorId);
+        if (!collab) return;
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const localTime = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const localDate = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+        const record = {
+            collaboratorId, collaboratorName: collab.name, roleName: collab.roleName, roleColor: collab.roleColor,
+            type: rrhhAttType, photo, timestamp: firebase.firestore.FieldValue.serverTimestamp(), localTime, localDate
+        };
+        db.collection('rrhh_attendance').add(record).then(() => {
+            showAttendanceConfirmation(collab, rrhhAttType, now);
+            loadTodayAttendance();
+        }).catch(() => { showToast('Error registrando asistencia', 'warning'); });
+    }
+
+    function showAttendanceConfirmation(collab, type, time) {
+        $('rrhh-confirm-name').textContent = collab.name;
+        $('rrhh-confirm-badge').textContent = collab.roleName;
+        $('rrhh-confirm-badge').style.background = collab.roleColor;
+        const typeEl = $('rrhh-confirm-type');
+        typeEl.className = 'rrhh-confirm-type ' + type;
+        typeEl.innerHTML = type === 'entrada'
+            ? '<i class="fas fa-sign-in-alt"></i> Entrada'
+            : '<i class="fas fa-sign-out-alt"></i> Salida';
+        $('rrhh-confirm-time').textContent = time.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+        const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        $('rrhh-confirm-date').textContent = `${days[time.getDay()]}, ${time.getDate()} de ${months[time.getMonth()]} ${time.getFullYear()}`;
+        // Reset checkmark animation
+        const svg = document.querySelector('.rrhh-checkmark');
+        if (svg) { svg.style.display = 'none'; void svg.offsetHeight; svg.style.display = ''; }
+        $('rrhh-confirm-overlay').classList.remove('hidden');
+    }
+
+    // --- Clock ---
+    function startRRHHClock() {
+        updateRRHHClock();
+        rrhhClockInterval = setInterval(updateRRHHClock, 1000);
+        loadTodayAttendance();
+    }
+
+    function stopRRHHClock() {
+        if (rrhhClockInterval) { clearInterval(rrhhClockInterval); rrhhClockInterval = null; }
+    }
+
+    function updateRRHHClock() {
+        const now = new Date();
+        const timeEl = $('rrhh-clock-time');
+        const dateEl = $('rrhh-clock-date');
+        if (timeEl) timeEl.textContent = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        if (dateEl) dateEl.textContent = `${days[now.getDay()]}, ${now.getDate()} de ${months[now.getMonth()]} ${now.getFullYear()}`;
+    }
+
+    function loadTodayAttendance() {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const today = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+        db.collection('rrhh_attendance').where('localDate', '==', today).orderBy('timestamp', 'desc').get().then(snap => {
+            const records = [];
+            snap.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
+            renderTodayLog(records);
+        }).catch(() => {
+            // Index might not exist yet
+            db.collection('rrhh_attendance').where('localDate', '==', today).get().then(snap => {
+                const records = [];
+                snap.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
+                renderTodayLog(records);
+            });
+        });
+    }
+
+    function renderTodayLog(records) {
+        const container = $('rrhh-today-log');
+        if (!container) return;
+        if (!records.length) { container.innerHTML = '<p class="rrhh-empty">No hay registros para hoy</p>'; return; }
+        container.innerHTML = records.map(r => {
+            const time = r.localTime ? r.localTime.split(' ')[1] : '--:--:--';
+            return `
+            <div class="rrhh-log-entry">
+                <div class="rrhh-log-type ${r.type}"><i class="fas ${r.type === 'entrada' ? 'fa-sign-in-alt' : 'fa-sign-out-alt'}"></i></div>
+                <div class="rrhh-log-info">
+                    <div class="rrhh-log-name">${r.collaboratorName}</div>
+                    <div class="rrhh-log-time">${time} · <span style="color:${r.roleColor}">${r.roleName}</span></div>
+                </div>
+                <span class="rrhh-role-badge" style="background:${r.type === 'entrada' ? 'rgba(92,184,92,0.15)' : 'rgba(255,71,87,0.15)'};color:${r.type === 'entrada' ? '#5cb85c' : '#ff4757'};font-size:10px;padding:3px 10px">
+                    ${r.type === 'entrada' ? 'Entrada' : 'Salida'}
+                </span>
+            </div>`;
+        }).join('');
+    }
+
+    // --- Reports ---
+    function getRRHHDateRange() {
+        const now = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+        if (rrhhReportRange === 'today') {
+            return { startDate: fmt(now), endDate: fmt(now) };
+        } else if (rrhhReportRange === 'week') {
+            const start = new Date(now); start.setDate(start.getDate() - start.getDay());
+            const end = new Date(start); end.setDate(end.getDate() + 6);
+            return { startDate: fmt(start), endDate: fmt(end) };
+        } else if (rrhhReportRange === 'month') {
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            return { startDate: fmt(start), endDate: fmt(end) };
+        } else {
+            const from = $('rrhh-report-from').value;
+            const to = $('rrhh-report-to').value;
+            if (!from || !to) { showToast('Selecciona fechas', 'warning'); return null; }
+            return { startDate: from, endDate: to };
+        }
+    }
+
+    function loadRRHHReports() {
+        const range = getRRHHDateRange();
+        if (!range) return;
+        db.collection('rrhh_attendance')
+            .where('localDate', '>=', range.startDate)
+            .where('localDate', '<=', range.endDate)
+            .orderBy('localDate', 'desc')
+            .get().then(snap => {
+                const records = [];
+                snap.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
+                renderRRHHStats(records);
+                renderRRHHTable(records);
+            }).catch(() => {
+                // Fallback without ordering
+                db.collection('rrhh_attendance')
+                    .where('localDate', '>=', range.startDate)
+                    .where('localDate', '<=', range.endDate)
+                    .get().then(snap => {
+                        const records = [];
+                        snap.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
+                        renderRRHHStats(records);
+                        renderRRHHTable(records);
+                    });
+            });
+    }
+
+    function renderRRHHStats(records) {
+        const total = records.length;
+        const entradas = records.filter(r => r.type === 'entrada').length;
+        const salidas = records.filter(r => r.type === 'salida').length;
+        const uniqueCollabs = new Set(records.map(r => r.collaboratorId)).size;
+        const container = $('rrhh-stats-grid');
+        if (!container) return;
+        container.innerHTML = `
+            <div class="rrhh-stat-card"><div class="rrhh-stat-icon accent"><i class="fas fa-clipboard-list"></i></div><div class="rrhh-stat-info"><span>Total Registros</span><div class="rrhh-stat-value">${total}</div></div></div>
+            <div class="rrhh-stat-card"><div class="rrhh-stat-icon green"><i class="fas fa-sign-in-alt"></i></div><div class="rrhh-stat-info"><span>Entradas</span><div class="rrhh-stat-value">${entradas}</div></div></div>
+            <div class="rrhh-stat-card"><div class="rrhh-stat-icon red"><i class="fas fa-sign-out-alt"></i></div><div class="rrhh-stat-info"><span>Salidas</span><div class="rrhh-stat-value">${salidas}</div></div></div>
+            <div class="rrhh-stat-card"><div class="rrhh-stat-icon blue"><i class="fas fa-users"></i></div><div class="rrhh-stat-info"><span>Colaboradores</span><div class="rrhh-stat-value">${uniqueCollabs}</div></div></div>`;
+    }
+
+    function renderRRHHTable(records) {
+        const tbody = $('rrhh-report-tbody');
+        if (!tbody) return;
+        if (!records.length) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-light);padding:24px">Sin registros en este período</td></tr>';
+            return;
+        }
+        tbody.innerHTML = records.map(r => `
+            <tr>
+                <td>${r.localTime || '--'}</td>
+                <td>${r.collaboratorName}</td>
+                <td><span class="rrhh-role-badge" style="background:${r.roleColor};font-size:10px;padding:2px 8px">${r.roleName}</span></td>
+                <td class="type-${r.type}">${r.type === 'entrada' ? '<i class="fas fa-sign-in-alt"></i> Entrada' : '<i class="fas fa-sign-out-alt"></i> Salida'}</td>
+                <td>${r.photo ? '<img class="rrhh-table-photo" src="' + r.photo + '" alt="foto">' : '-'}</td>
+            </tr>`).join('');
     }
 
     // ========================================

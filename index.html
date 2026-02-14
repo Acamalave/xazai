@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
-    <link rel="stylesheet" href="styles.css?v=20260213h">
+    <link rel="stylesheet" href="styles.css?v=20260213i">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -241,6 +241,10 @@
                     <i class="fas fa-chart-line"></i>
                     <span>Dashboard</span>
                 </button>
+                <button class="admin-nav-btn" data-section="rrhh">
+                    <i class="fas fa-id-badge"></i>
+                    <span>RRHH</span>
+                </button>
             </nav>
             <button class="admin-logout-btn" id="admin-logout">
                 <i class="fas fa-sign-out-alt"></i>
@@ -471,6 +475,132 @@
                     <div id="dash-recent-content"></div>
                 </div>
             </section>
+
+            <!-- RRHH Section -->
+            <section id="admin-sec-rrhh" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-id-badge"></i> Recursos Humanos</h2>
+                    <p class="admin-section-subtitle">Gestiona roles, colaboradores y asistencia biométrica</p>
+                </div>
+
+                <!-- RRHH Internal Tabs -->
+                <div class="rrhh-tabs">
+                    <button class="rrhh-tab-btn active" data-rrhh-tab="roles"><i class="fas fa-user-shield"></i> Roles</button>
+                    <button class="rrhh-tab-btn" data-rrhh-tab="colaboradores"><i class="fas fa-users"></i> Colaboradores</button>
+                    <button class="rrhh-tab-btn" data-rrhh-tab="asistencia"><i class="fas fa-fingerprint"></i> Asistencia</button>
+                    <button class="rrhh-tab-btn" data-rrhh-tab="reportes"><i class="fas fa-chart-bar"></i> Reportes</button>
+                </div>
+
+                <!-- TAB: Roles -->
+                <div id="rrhh-tab-roles" class="rrhh-tab-content">
+                    <div class="rrhh-card-form">
+                        <h3><i class="fas fa-plus-circle"></i> <span id="rrhh-role-form-title">Nuevo Rol</span></h3>
+                        <div class="rrhh-form-grid">
+                            <div class="rrhh-field">
+                                <label>Nombre del Rol</label>
+                                <input type="text" id="rrhh-role-name" placeholder="Ej: Cajero">
+                            </div>
+                            <div class="rrhh-field">
+                                <label>Color</label>
+                                <input type="color" id="rrhh-role-color" value="#7b2d8e">
+                            </div>
+                        </div>
+                        <div class="rrhh-field">
+                            <label>Permisos</label>
+                            <div class="rrhh-permissions-grid" id="rrhh-role-permissions"></div>
+                        </div>
+                        <button class="rrhh-save-btn" id="rrhh-role-save-btn"><i class="fas fa-save"></i> Guardar Rol</button>
+                    </div>
+                    <div id="rrhh-roles-list" class="rrhh-roles-grid"></div>
+                </div>
+
+                <!-- TAB: Colaboradores -->
+                <div id="rrhh-tab-colaboradores" class="rrhh-tab-content hidden">
+                    <div class="rrhh-card-form">
+                        <h3><i class="fas fa-user-plus"></i> <span id="rrhh-collab-form-title">Nuevo Colaborador</span></h3>
+                        <div class="rrhh-form-grid">
+                            <div class="rrhh-field">
+                                <label>Nombre Completo</label>
+                                <input type="text" id="rrhh-collab-name" placeholder="Nombre y Apellido">
+                            </div>
+                            <div class="rrhh-field">
+                                <label>Cédula</label>
+                                <input type="text" id="rrhh-collab-cedula" placeholder="8-888-8888">
+                            </div>
+                            <div class="rrhh-field">
+                                <label>Teléfono</label>
+                                <input type="tel" id="rrhh-collab-phone" placeholder="+507 6000-0000">
+                            </div>
+                            <div class="rrhh-field">
+                                <label>Rol</label>
+                                <select id="rrhh-collab-role"><option value="">Seleccionar rol...</option></select>
+                            </div>
+                        </div>
+                        <button class="rrhh-save-btn" id="rrhh-collab-save-btn"><i class="fas fa-save"></i> Guardar Colaborador</button>
+                    </div>
+                    <div id="rrhh-pendientes-section" class="rrhh-pendientes hidden">
+                        <h3 class="rrhh-pendientes-title"><i class="fas fa-exclamation-triangle"></i> Pendientes de Biometría</h3>
+                        <div id="rrhh-pendientes-list" class="rrhh-collab-grid"></div>
+                    </div>
+                    <h3 class="rrhh-sub-title"><i class="fas fa-users"></i> Colaboradores Activos</h3>
+                    <div id="rrhh-collabs-list" class="rrhh-collab-grid"></div>
+                </div>
+
+                <!-- TAB: Asistencia -->
+                <div id="rrhh-tab-asistencia" class="rrhh-tab-content hidden">
+                    <div class="rrhh-attendance-layout">
+                        <div class="rrhh-attendance-panel">
+                            <div class="rrhh-clock-display">
+                                <div class="rrhh-clock-time" id="rrhh-clock-time">00:00:00</div>
+                                <div class="rrhh-clock-date" id="rrhh-clock-date">--</div>
+                            </div>
+                            <div class="rrhh-attendance-form">
+                                <h3>Registrar Asistencia</h3>
+                                <div class="rrhh-field">
+                                    <label>Colaborador</label>
+                                    <select id="rrhh-att-collaborator"><option value="">Seleccionar colaborador...</option></select>
+                                </div>
+                                <div class="rrhh-att-type-btns">
+                                    <button class="rrhh-att-type-btn active" data-att-type="entrada"><i class="fas fa-sign-in-alt"></i> Entrada</button>
+                                    <button class="rrhh-att-type-btn" data-att-type="salida"><i class="fas fa-sign-out-alt"></i> Salida</button>
+                                </div>
+                                <button class="rrhh-scan-btn" id="rrhh-att-scan-btn" disabled><i class="fas fa-camera"></i> Escanear Biometría</button>
+                            </div>
+                        </div>
+                        <div class="rrhh-attendance-log">
+                            <h3><i class="fas fa-clipboard-list"></i> Registro de Hoy</h3>
+                            <div id="rrhh-today-log"><p class="rrhh-empty">No hay registros para hoy</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: Reportes -->
+                <div id="rrhh-tab-reportes" class="rrhh-tab-content hidden">
+                    <div class="rrhh-report-controls">
+                        <div class="rrhh-report-range">
+                            <button class="rrhh-range-btn active" data-rrhh-range="today">Hoy</button>
+                            <button class="rrhh-range-btn" data-rrhh-range="week">Semana</button>
+                            <button class="rrhh-range-btn" data-rrhh-range="month">Mes</button>
+                            <button class="rrhh-range-btn" data-rrhh-range="custom">Rango</button>
+                        </div>
+                        <div class="rrhh-report-custom hidden" id="rrhh-report-custom">
+                            <input type="date" id="rrhh-report-from">
+                            <span>—</span>
+                            <input type="date" id="rrhh-report-to">
+                            <button class="rrhh-apply-btn" id="rrhh-report-apply"><i class="fas fa-search"></i></button>
+                        </div>
+                    </div>
+                    <div class="rrhh-stats-grid" id="rrhh-stats-grid"></div>
+                    <div class="rrhh-report-table-wrap">
+                        <h3><i class="fas fa-table"></i> Historial Completo</h3>
+                        <table class="rrhh-table" id="rrhh-report-table">
+                            <thead><tr><th>Fecha/Hora</th><th>Colaborador</th><th>Rol</th><th>Tipo</th><th>Foto</th></tr></thead>
+                            <tbody id="rrhh-report-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -616,6 +746,47 @@
         </div>
     </div>
 
+    <!-- RRHH Biometric Camera Modal -->
+    <div class="modal-overlay hidden" id="rrhh-camera-modal">
+        <div class="rrhh-camera-content">
+            <button class="modal-close" id="rrhh-camera-close"><i class="fas fa-times"></i></button>
+            <h2 id="rrhh-camera-title">Registro Biométrico</h2>
+            <p class="rrhh-camera-subtitle" id="rrhh-camera-subtitle">Posiciona tu rostro en el centro</p>
+            <div class="rrhh-camera-viewport">
+                <video id="rrhh-camera-video" autoplay playsinline></video>
+                <canvas id="rrhh-camera-canvas" style="display:none"></canvas>
+                <div class="rrhh-face-guide"></div>
+                <div class="rrhh-countdown hidden" id="rrhh-countdown"><span id="rrhh-countdown-number">3</span></div>
+                <div class="rrhh-scan-line hidden" id="rrhh-scan-line"></div>
+                <div class="rrhh-scan-result hidden" id="rrhh-scan-result">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="rrhh-scan-result-text">Verificado</span>
+                </div>
+            </div>
+            <div class="rrhh-camera-actions">
+                <button class="rrhh-capture-btn" id="rrhh-capture-btn"><i class="fas fa-camera"></i> Capturar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RRHH Attendance Confirmation Overlay -->
+    <div class="rrhh-confirm-overlay hidden" id="rrhh-confirm-overlay">
+        <div class="rrhh-confirm-modal">
+            <div class="rrhh-confirm-check">
+                <svg class="rrhh-checkmark" viewBox="0 0 52 52">
+                    <circle class="rrhh-checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+                    <path class="rrhh-checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+                </svg>
+            </div>
+            <h2 id="rrhh-confirm-name">—</h2>
+            <div class="rrhh-confirm-role"><span class="rrhh-role-badge" id="rrhh-confirm-badge">—</span></div>
+            <div class="rrhh-confirm-type" id="rrhh-confirm-type"><i class="fas fa-sign-in-alt"></i> Entrada</div>
+            <div class="rrhh-confirm-time" id="rrhh-confirm-time">--:--:--</div>
+            <div class="rrhh-confirm-date" id="rrhh-confirm-date">--</div>
+            <button class="btn-confirm-ok" id="rrhh-confirm-ok">Aceptar</button>
+        </div>
+    </div>
+
     <!-- TOAST NOTIFICATIONS -->
     <div class="toast-container" id="toast-container"></div>
 
@@ -627,8 +798,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260213h"></script>
+    <script src="data.js?v=20260213i"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260213h"></script>
+    <script src="app.js?v=20260213i"></script>
 </body>
 </html>
