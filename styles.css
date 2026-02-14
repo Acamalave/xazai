@@ -3868,44 +3868,72 @@ body {
     box-shadow: none !important;
     border: none !important;
     overflow: visible !important;
-    /* Remove stacking context so Yappy's fixed modal can escape */
     position: static !important;
     transform: none !important;
-    transition: opacity 0.3s ease;
+    max-width: 100vw !important;
+    width: 100vw !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }
 
-/* Hide all children inside payment-modal-content EXCEPT btn-yappy's container */
+/* Hide all children inside payment-modal-content EXCEPT payment-methods */
 #payment-modal.yappy-active .payment-modal-content > *:not(.payment-methods) {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    max-height: 0 !important;
-    overflow: hidden !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    display: none !important;
 }
 
 /* Inside payment-methods, hide everything except yappy container */
 #payment-modal.yappy-active .payment-methods > *:not(#yappy-btn-container) {
-    opacity: 0 !important;
-    pointer-events: none !important;
-    max-height: 0 !important;
-    overflow: hidden !important;
-    margin: 0 !important;
+    display: none !important;
+}
+
+/* Hide the payment-methods heading and dividers */
+#payment-modal.yappy-active .payment-methods {
     padding: 0 !important;
+    margin: 0 !important;
 }
 
 #payment-modal.yappy-active {
     background: rgba(0, 0, 0, 0.85) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+    align-items: center !important;
+    justify-content: center !important;
 }
 
-/* Let btn-yappy stay in normal flow so Angular can render its modal */
+/* Hide the original Yappy "Pagar con" button when payment is processing */
+#payment-modal.yappy-active btn-yappy .yappy-button {
+    display: none !important;
+}
+
+/* Center the Yappy dialog on screen */
 #payment-modal.yappy-active #yappy-btn-container {
-    position: static;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 10001 !important;
 }
 
-/* Ensure Yappy's internal fixed-position backdrop and modal can escape stacking context */
+/* Style the Yappy dialog element to be centered and visible */
+#payment-modal.yappy-active dialog,
+#payment-modal.yappy-active app-dialog {
+    display: block !important;
+}
+
+#payment-modal.yappy-active .dialog-container {
+    background: #f5f5f5;
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 500px;
+    width: 90vw;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* Ensure Yappy's backdrop covers screen */
 #payment-modal.yappy-active btn-yappy .yappy-backdrop {
     z-index: 10000 !important;
 }
@@ -4227,12 +4255,12 @@ body {
     .schedule-modal-content { width: 95%; padding: 32px 20px; }
     .modal-overlay { padding: 0; align-items: flex-end; }
 
-    /* Mobile: When Yappy is active, let modal escape bottom-sheet constraints */
+    /* Mobile: When Yappy is active */
     #payment-modal.yappy-active { align-items: center !important; padding: 0 !important; }
-    #payment-modal.yappy-active .payment-modal-content {
-        width: auto !important; max-width: none !important;
-        border-radius: 0 !important; padding: 0 !important;
-        min-height: auto !important;
+    #payment-modal.yappy-active .dialog-container {
+        padding: 24px !important;
+        width: 92vw !important;
+        border-radius: 12px !important;
     }
 }
 
