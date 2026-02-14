@@ -2105,7 +2105,6 @@ document.addEventListener('DOMContentLoaded', function() {
             closePaymentModal();
             orderNumber.textContent = orderId;
             confirmationOverlay.classList.remove('hidden');
-            playCashRegisterSound();
             showToast('¡Pago confirmado con Yappy!', 'success');
 
             // Update Firestore: mark as paid
@@ -2279,7 +2278,6 @@ document.addEventListener('DOMContentLoaded', function() {
         closePaymentModal();
         if (!cartSidebar.classList.contains('hidden')) toggleCart();
         confirmationOverlay.classList.remove('hidden');
-        playCashRegisterSound();
     }
 
     btnCheckout.addEventListener('click', handleCheckout);
@@ -2300,6 +2298,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const inicioTab = document.querySelector('.tab[data-category="inicio"]');
             if (inicioTab) inicioTab.classList.add('active');
             renderCategory('inicio');
+            // Scroll to top so the tracker is visible
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     });
 
