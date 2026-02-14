@@ -1936,6 +1936,61 @@ document.addEventListener('DOMContentLoaded', function() {
             updateDeliveryFeeFromMarker(lat, lng);
         }
 
+        // Local database of known PHs/buildings in Panama City
+        const LOCAL_PLACES = [
+            { name: 'PH South Coast Tower, Costa del Este', lat: 9.0108, lng: -79.4628 },
+            { name: 'PH Vitri Tower, Costa del Este', lat: 9.0125, lng: -79.4645 },
+            { name: 'PH Ocean Two, Costa del Este', lat: 9.0095, lng: -79.4610 },
+            { name: 'PH Breeze, Costa del Este', lat: 9.0130, lng: -79.4660 },
+            { name: 'PH Destiny, Costa del Este', lat: 9.0102, lng: -79.4622 },
+            { name: 'PH Pearl at the Sea, Costa del Este', lat: 9.0088, lng: -79.4605 },
+            { name: 'PH Portovita, Costa del Este', lat: 9.0115, lng: -79.4638 },
+            { name: 'PH Pijao, Costa del Este', lat: 9.0098, lng: -79.4618 },
+            { name: 'PH Costa View, Costa del Este', lat: 9.0120, lng: -79.4650 },
+            { name: 'PH Mar del Sur, Costa del Este', lat: 9.0080, lng: -79.4600 },
+            { name: 'PH Green Bay, Costa del Este', lat: 9.0135, lng: -79.4670 },
+            { name: 'PH Acqua, Costa del Este', lat: 9.0092, lng: -79.4615 },
+            { name: 'PH Pacific Village, Costa del Este', lat: 9.0140, lng: -79.4675 },
+            { name: 'PH Pacific Point, Punta Pacífica', lat: 8.9820, lng: -79.5200 },
+            { name: 'PH The Point, Punta Pacífica', lat: 8.9810, lng: -79.5195 },
+            { name: 'PH Ocean Park, Punta Pacífica', lat: 8.9815, lng: -79.5190 },
+            { name: 'PH Grand Tower, Punta Pacífica', lat: 8.9825, lng: -79.5210 },
+            { name: 'PH Megapolis, Punta Pacífica', lat: 8.9830, lng: -79.5220 },
+            { name: 'PH JW Marriott, Punta Pacífica', lat: 8.9808, lng: -79.5185 },
+            { name: 'PH Oasis on the Bay, Av. Balboa', lat: 8.9750, lng: -79.5280 },
+            { name: 'PH Yoo Panama, Av. Balboa', lat: 8.9755, lng: -79.5275 },
+            { name: 'PH White Tower, Av. Balboa', lat: 8.9760, lng: -79.5260 },
+            { name: 'PH Rivage, Av. Balboa', lat: 8.9745, lng: -79.5290 },
+            { name: 'PH Ten Tower, Av. Balboa', lat: 8.9752, lng: -79.5270 },
+            { name: 'PH Pacific Star, San Francisco', lat: 8.9900, lng: -79.5050 },
+            { name: 'PH Dupont, San Francisco', lat: 8.9910, lng: -79.5040 },
+            { name: 'PH Midtown, San Francisco', lat: 8.9920, lng: -79.5030 },
+            { name: 'PH Sky, San Francisco', lat: 8.9905, lng: -79.5045 },
+            { name: 'PH Element, San Francisco', lat: 8.9915, lng: -79.5035 },
+            { name: 'PH Q Tower, San Francisco', lat: 8.9925, lng: -79.5025 },
+            { name: 'PH Generation Tower, San Francisco', lat: 8.9895, lng: -79.5055 },
+            { name: 'PH Park Loft, San Francisco', lat: 8.9930, lng: -79.5020 },
+            { name: 'PH Scala, El Cangrejo', lat: 8.9830, lng: -79.5350 },
+            { name: 'PH Titanium, El Cangrejo', lat: 8.9835, lng: -79.5340 },
+            { name: 'Torres de las Américas, Punta Pacífica', lat: 8.9822, lng: -79.5205 },
+            { name: 'Town Center, Costa del Este', lat: 9.0145, lng: -79.4680 },
+            { name: 'Parque Urraca, Bella Vista', lat: 8.9790, lng: -79.5310 },
+            { name: 'Santa María Golf, Brisas del Golf', lat: 9.0370, lng: -79.4710 },
+            { name: 'Ciudad del Saber, Clayton', lat: 9.0190, lng: -79.5650 },
+            { name: 'Albrook Mall, Albrook', lat: 9.0060, lng: -79.5540 },
+            { name: 'Multiplaza, Punta Pacífica', lat: 8.9835, lng: -79.5230 },
+            { name: 'MetroMall, Vía España', lat: 9.0005, lng: -79.5100 },
+            { name: 'Altaplaza Mall, Condado del Rey', lat: 9.0370, lng: -79.5150 },
+        ];
+
+        function searchLocalPlaces(query) {
+            const q = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            return LOCAL_PLACES.filter(p => {
+                const name = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                return q.split(' ').every(word => name.includes(word));
+            }).slice(0, 4);
+        }
+
         function performSearch(query) {
             if (!query || query.length < 3) { hideSuggestions(); return; }
 
@@ -1947,20 +2002,26 @@ document.addEventListener('DOMContentLoaded', function() {
             const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&viewbox=-79.60,9.10,-79.35,8.90&bounded=1&countrycodes=pa`;
             const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query + ' Panama City')}&limit=5&lat=${STORE_LAT}&lon=${STORE_LNG}&lang=es`;
 
+            // Search local PHs first (instant)
+            const localResults = searchLocalPlaces(query).map(p => ({
+                lat: p.lat, lng: p.lng, name: p.name, local: true
+            }));
+
             // Try both APIs in parallel and merge results
             Promise.allSettled([
                 fetch(nominatimUrl).then(r => r.json()),
                 fetch(photonUrl).then(r => r.json())
             ]).then(([nominatimRes, photonRes]) => {
-                let results = [];
+                let results = [...localResults]; // Local results first
 
                 // Parse Nominatim results
                 if (nominatimRes.status === 'fulfilled' && nominatimRes.value.length > 0) {
-                    results = nominatimRes.value.map(r => ({
-                        lat: parseFloat(r.lat),
-                        lng: parseFloat(r.lon),
-                        name: r.display_name
-                    }));
+                    nominatimRes.value.forEach(r => {
+                        const isDuplicate = results.some(ex => Math.abs(ex.lat - parseFloat(r.lat)) < 0.002 && Math.abs(ex.lng - parseFloat(r.lon)) < 0.002);
+                        if (!isDuplicate) {
+                            results.push({ lat: parseFloat(r.lat), lng: parseFloat(r.lon), name: r.display_name });
+                        }
+                    });
                 }
 
                 // Parse Photon results and add non-duplicates
@@ -1971,7 +2032,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Only add if not too far from Panama City and not duplicate
                         if (Math.abs(plat - STORE_LAT) < 0.3 && Math.abs(plng - STORE_LNG) < 0.3) {
                             const pname = [f.properties.name, f.properties.street, f.properties.district, f.properties.city].filter(Boolean).join(', ');
-                            const isDuplicate = results.some(r => Math.abs(r.lat - plat) < 0.001 && Math.abs(r.lng - plng) < 0.001);
+                            const isDuplicate = results.some(r => Math.abs(r.lat - plat) < 0.002 && Math.abs(r.lng - plng) < 0.002);
                             if (!isDuplicate && pname) {
                                 results.push({ lat: plat, lng: plng, name: pname });
                             }
@@ -1983,15 +2044,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 results = results.slice(0, 6);
 
                 if (results.length === 0) {
-                    sDiv.innerHTML = '<div class="map-suggestion-item" style="color:var(--text-light);cursor:default;"><i class="fas fa-info-circle"></i> Sin resultados. Intenta buscar por barrio o calle</div>';
+                    sDiv.innerHTML = '<div class="map-suggestion-item" style="color:var(--text-light);cursor:default;padding:10px 12px;line-height:1.4;"><i class="fas fa-info-circle"></i> Sin resultados. Busca por barrio o calle, o toca directamente en el mapa tu ubicación</div>';
                     sDiv.classList.remove('hidden');
                     return;
                 }
 
                     sDiv.innerHTML = results.map(r => {
                         const shortName = r.name.length > 80 ? r.name.substring(0, 80) + '...' : r.name;
+                        const icon = r.local ? 'fa-building' : 'fa-map-marker-alt';
                         return `<div class="map-suggestion-item" data-lat="${r.lat}" data-lng="${r.lng}" data-name="${r.name.replace(/"/g, '&quot;')}">
-                            <i class="fas fa-map-marker-alt"></i>
+                            <i class="fas ${icon}"></i>
                             <span>${shortName}</span>
                         </div>`;
                     }).join('');
