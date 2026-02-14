@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
-    <link rel="stylesheet" href="styles.css?v=20260214d">
+    <link rel="stylesheet" href="styles.css?v=20260214e">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -28,7 +28,7 @@
                 <button class="tab" data-category="shots"><i class="fas fa-fire-flame-curved"></i> Shots</button>
                 <button class="tab" data-category="cafe"><i class="fas fa-mug-hot"></i> Café</button>
                 <button class="tab" data-category="bebidas"><i class="fas fa-bottle-water"></i> Bebidas</button>
-                <button class="tab tab-mis-pedidos hidden" data-category="mis-pedidos" id="tab-mis-pedidos"><i class="fas fa-receipt"></i> Mis Pedidos</button>
+                <!-- Mis Pedidos moved to user dropdown -->
                 <button class="tab tab-highlight" data-category="arma-tu-bowl"><i class="fas fa-wand-magic-sparkles"></i> Arma tu Bowl</button>
             </div>
         </div>
@@ -49,6 +49,9 @@
                 <div class="user-dropdown hidden" id="user-dropdown">
                     <button id="admin-panel-btn" class="dropdown-item hidden">
                         <i class="fas fa-cog"></i> Panel Admin
+                    </button>
+                    <button id="tab-mis-pedidos" class="dropdown-item hidden">
+                        <i class="fas fa-receipt"></i> Mis Pedidos
                     </button>
                     <button id="login-trigger-btn" class="dropdown-item">
                         <i class="fas fa-sign-in-alt"></i> Iniciar Sesión
@@ -896,8 +899,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260214d"></script>
+    <script src="data.js?v=20260214e"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260214d"></script>
+    <script src="app.js?v=20260214e"></script>
 </body>
 </html>

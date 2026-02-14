@@ -702,7 +702,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const justDelivered = allOrders.find(o =>
                 o.status === 'entregado' && !o.rating && !o.ratedAt && !ratingDismissed.has(o.id)
             );
-            if (justDelivered) {
+            if (justDelivered && currentUser && currentUser.role !== 'admin') {
                 setTimeout(() => showRatingModal(justDelivered), 1500);
             }
         }, err => {
@@ -967,7 +967,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const cats = ['bowls', 'smoothies', 'jugos', 'shots', 'cafe', 'bebidas'];
         let html = '';
 
-        // Active order tracker OR "Volver a comprar"
+        // Active order tracker OR "Volver a disfrutar"
         if (currentUser && currentUser.phone && customerActiveOrders.length > 0) {
             // Show animated order tracker for most recent active order
             html += renderHomeOrderTracker(customerActiveOrders[0]);
@@ -978,7 +978,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 html += `
                     <div class="reorder-section">
                         <div class="reorder-header">
-                            <h3><i class="fas fa-clock-rotate-left"></i> Volver a comprar</h3>
+                            <h3><i class="fas fa-heart"></i> Volver a disfrutar</h3>
                             <p>Tus pedidos anteriores</p>
                         </div>
                         <div class="reorder-scroll">
@@ -2271,7 +2271,7 @@ document.addEventListener('DOMContentLoaded', function() {
     floatingCheckoutBtn.addEventListener('click', handleCheckout);
     btnConfirmOk.addEventListener('click', () => {
         confirmationOverlay.classList.add('hidden');
-        // Navigate to "Mis Pedidos" after placing order (if logged in with phone)
+        // Navigate to Home after placing order so customer sees the order tracker
         if (currentUser && currentUser.phone && currentUser.role !== 'admin') {
             showMisPedidosTab();
             // Start listener if needed
@@ -2280,10 +2280,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             // Also reload history for reorder section
             loadCustomerOrderHistory(currentUser.phone);
-            // Switch to Mis Pedidos tab
+            // Go to Home (Inicio) to see the order tracker
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            if (tabMisPedidos) tabMisPedidos.classList.add('active');
-            renderCategory('mis-pedidos');
+            const inicioTab = document.querySelector('.tab[data-category="inicio"]');
+            if (inicioTab) inicioTab.classList.add('active');
+            renderCategory('inicio');
         }
     });
 
@@ -2445,7 +2446,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderAdminOrders(filterStatus = 'all') {
         const container = $('admin-orders-list');
-        const filtered = filterStatus === 'all' ? firestoreOrders : firestoreOrders.filter(o => o.status === filterStatus);
+        const filtered = filterStatus === 'all'
+            ? firestoreOrders.filter(o => !['entregado', 'cancelado'].includes(o.status))
+            : firestoreOrders.filter(o => o.status === filterStatus);
 
         if (!filtered.length) {
             container.innerHTML = '<p class="no-orders">No hay pedidos</p>';
@@ -3060,6 +3063,18 @@ document.addEventListener('DOMContentLoaded', function() {
         userDropdown.classList.add('hidden');
         enterAdminMode();
     });
+
+    // Mis Pedidos dropdown item click
+    if (tabMisPedidos) {
+        tabMisPedidos.addEventListener('click', () => {
+            userDropdown.classList.add('hidden');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            renderCategory('mis-pedidos');
+            if (currentUser && currentUser.phone && !customerOrdersUnsubscribe) {
+                startCustomerOrdersListener(currentUser.phone);
+            }
+        });
+    }
 
     // ========================================
     // ADMIN ACCESS (click logo)
