@@ -1837,8 +1837,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         orderId, cart: [...cart], deliveryAddress, total, subtotal
                     }));
 
-                    // Save order to Firestore as waiting for payment
-                    saveOrderToFirestore(orderId, deliveryAddress, 'esperando_pago', total, subtotal);
+                    // Save order to Firestore as waiting for payment (non-blocking)
+                    try {
+                        saveOrderToFirestore(orderId, deliveryAddress, 'esperando_pago', total, subtotal);
+                    } catch (fsErr) {
+                        console.error('Firestore save error (non-blocking):', fsErr);
+                    }
 
                     // Hand off data to the web component — it opens the Yappy payment modal
                     btnYappy.eventPayment({
@@ -1918,20 +1922,37 @@ document.addEventListener('DOMContentLoaded', function() {
     function saveOrderToFirestore(orderId, address, status, total, subtotal) {
         if (typeof db === 'undefined') return;
         const deliveryFee = 4.50;
+        // Sanitize cart items to remove any undefined values
+        const sanitizedItems = cart.map(i => ({
+            name: i.name || '',
+            quantity: i.quantity || 1,
+            price: i.price || 0,
+            total: i.total || 0,
+            emoji: i.emoji || '',
+            size: i.size || '',
+            toppings: i.toppings || [],
+            note: i.note || ''
+        }));
+        // Clean scheduledSlot — Firestore rejects undefined values
+        const cleanSlot = scheduledSlot ? {
+            value: scheduledSlot.value || '',
+            label: scheduledSlot.label || '',
+            time: scheduledSlot.time || ''
+        } : null;
         db.collection('orders').add({
             number: orderId,
-            items: cart.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, total: i.total, emoji: i.emoji || '' })),
+            items: sanitizedItems,
             subtotal: subtotal || cart.reduce((s, i) => s + i.total, 0),
             delivery: deliveryFee,
-            tip: currentTip,
-            total: total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + currentTip),
+            tip: currentTip || 0,
+            total: total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + (currentTip || 0)),
             status: status,
             paymentMethod: 'yappy',
             paymentConfirmed: false,
-            customerName: currentUser ? currentUser.name : 'Invitado',
-            customerPhone: currentUser ? currentUser.phone : '',
-            address: address,
-            scheduledSlot: scheduledSlot || null,
+            customerName: currentUser ? (currentUser.name || 'Invitado') : 'Invitado',
+            customerPhone: currentUser ? (currentUser.phone || '') : '',
+            address: address || '',
+            scheduledSlot: cleanSlot,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }).then(() => {
             console.log(`Order ${orderId} saved to Firestore`);
