@@ -446,6 +446,7 @@ const EXTRA_TOPPINGS = [
     { id: 't4', name: 'Leche Condensada', price: 0.75, emoji: '🥛' },
     { id: 't5', name: 'Miel de Abeja', price: 0.75, emoji: '🍯' },
     { id: 't6', name: 'Mantequilla de Maní', price: 1.00, emoji: '🥜' },
+    { id: 't14', name: 'Mantequilla de Almendras', price: 1.00, emoji: '🌰' },
     { id: 't7', name: 'Peta Zetas (Magic Pop)', price: 1.00, emoji: '💥' },
     { id: 't8', name: 'Arándanos', price: 1.25, emoji: '🫐' },
     { id: 't9', name: 'Nutella', price: 1.25, emoji: '🍫' },

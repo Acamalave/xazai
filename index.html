@@ -7,7 +7,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
-    <link rel="stylesheet" href="styles.css?v=20260214g">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <meta name="theme-color" content="#1a0a3e">
+    <link rel="stylesheet" href="styles.css?v=20260214h">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -251,6 +255,10 @@
                 <button class="admin-nav-btn" data-section="comportamiento">
                     <i class="fas fa-brain"></i>
                     <span>Comportamiento</span>
+                </button>
+                <button class="admin-nav-btn" data-section="facturacion">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                    <span>Facturación</span>
                 </button>
                 <button class="admin-nav-btn" data-section="rrhh">
                     <i class="fas fa-id-badge"></i>
@@ -639,6 +647,61 @@
                 </div>
             </section>
 
+            <!-- FACTURACION Section -->
+            <section id="admin-sec-facturacion" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-file-invoice-dollar"></i> Facturación</h2>
+                </div>
+                <div class="fact-controls">
+                    <div class="fact-filters">
+                        <div class="fact-date-range">
+                            <label>Desde</label>
+                            <input type="date" id="fact-date-from">
+                            <label>Hasta</label>
+                            <input type="date" id="fact-date-to">
+                            <button class="fact-filter-btn" id="fact-filter-btn"><i class="fas fa-search"></i> Filtrar</button>
+                        </div>
+                        <div class="fact-quick-filters">
+                            <button class="fact-quick-btn active" data-range="today">Hoy</button>
+                            <button class="fact-quick-btn" data-range="week">Esta Semana</button>
+                            <button class="fact-quick-btn" data-range="month">Este Mes</button>
+                            <button class="fact-quick-btn" data-range="all">Todos</button>
+                        </div>
+                    </div>
+                    <div class="fact-summary">
+                        <div class="fact-stat">
+                            <span class="fact-stat-label">Facturas</span>
+                            <span class="fact-stat-value" id="fact-count">0</span>
+                        </div>
+                        <div class="fact-stat">
+                            <span class="fact-stat-label">Ventas Totales</span>
+                            <span class="fact-stat-value fact-stat-accent" id="fact-total-sales">$0.00</span>
+                        </div>
+                        <div class="fact-stat">
+                            <span class="fact-stat-label">Promedio</span>
+                            <span class="fact-stat-value" id="fact-avg">$0.00</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="fact-list" id="fact-list">
+                    <p class="no-orders">Cargando facturas...</p>
+                </div>
+            </section>
+
+            <!-- Invoice Detail Modal -->
+            <div class="fact-modal hidden" id="fact-modal">
+                <div class="fact-modal-content">
+                    <div class="fact-modal-header">
+                        <h3><i class="fas fa-file-invoice"></i> <span id="fact-modal-title">Factura</span></h3>
+                        <button class="fact-modal-close" id="fact-modal-close"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="fact-modal-body" id="fact-modal-body"></div>
+                    <div class="fact-modal-actions">
+                        <button class="fact-print-btn" id="fact-print-btn"><i class="fas fa-print"></i> Imprimir</button>
+                    </div>
+                </div>
+            </div>
+
             <!-- ASISTENCIA Standalone Section -->
             <section id="admin-sec-asistencia" class="admin-section hidden">
                 <div class="att-standalone-container">
@@ -899,8 +962,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260214g"></script>
+    <script src="data.js?v=20260214h"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260214g"></script>
+    <script src="app.js?v=20260214h"></script>
 </body>
 </html>

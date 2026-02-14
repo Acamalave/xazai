@@ -1174,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const hasToppingsIncluded = product.toppings && product.toppings.length > 0;
         const hasIngredients = product.ingredients && product.ingredients.length > 0;
         const isOnlyGrande = product.onlyGrande;
-        const showToppingsExtra = ['bowls'].includes(product.category);
+        const showToppingsExtra = ['bowls', 'smoothies'].includes(product.category);
         const isSmoothie = product.category === 'smoothies';
 
         // Size section: only show if not onlyGrande
@@ -1244,16 +1244,15 @@ document.addEventListener('DOMContentLoaded', function() {
         return `
             <div class="expand-inner">
                 ${hasIngredients ? `
-                <div class="expand-section">
-                    <p class="expand-text-line"><strong>Ingredientes:</strong> ${product.ingredients.join(', ')}</p>
-                    ${hasToppingsIncluded ? `<p class="expand-text-line"><strong>Toppings incluidos:</strong> ${product.toppings.join(', ')}</p>` : ''}
+                <div class="expand-section expand-info-row">
+                    <p class="expand-text-line"><i class="fas fa-leaf"></i> ${product.ingredients.join(' · ')}</p>
+                    ${hasToppingsIncluded ? `<p class="expand-text-line"><i class="fas fa-check-circle"></i> ${product.toppings.join(' · ')}</p>` : ''}
                 </div>` : ''}
                 ${sizeSection}
                 ${smoothieOptionsSection}
                 ${toppingsExtraSection}
                 <div class="expand-section">
-                    <h4><i class="fas fa-sticky-note"></i> Nota especial</h4>
-                    <textarea class="note-input" placeholder="¿Algo que debamos saber?" maxlength="200" rows="2"></textarea>
+                    <textarea class="note-input" placeholder="✏️ Nota especial (opcional)" maxlength="200" rows="1"></textarea>
                 </div>
                 <div class="expand-actions">
                     <div class="quantity-selector">
@@ -1266,7 +1265,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="expand-total-price">$${product.price.toFixed(2)}</span>
                     </div>
                     <button class="btn-add-expand">
-                        <i class="fas fa-cart-plus"></i> Agregar al Carrito
+                        <i class="fas fa-cart-plus"></i> Agregar
                     </button>
                 </div>
             </div>
@@ -4488,6 +4487,260 @@ document.addEventListener('DOMContentLoaded', function() {
             const orderNum = rateBtn.dataset.rateNumber;
             showRatingModal({ id: orderId, number: orderNum });
             return;
+        }
+    });
+
+    // ========================================
+    // FACTURACION — Invoice System
+    // ========================================
+
+    let factInvoices = [];
+    let factCurrentRange = 'today';
+
+    function initFacturacion() {
+        // Set default dates
+        const today = new Date();
+        const fromInput = $('fact-date-from');
+        const toInput = $('fact-date-to');
+        if (fromInput) fromInput.value = today.toISOString().split('T')[0];
+        if (toInput) toInput.value = today.toISOString().split('T')[0];
+
+        // Quick filter buttons
+        document.querySelectorAll('.fact-quick-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.fact-quick-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                factCurrentRange = btn.dataset.range;
+                loadFacturas(factCurrentRange);
+            });
+        });
+
+        // Custom date filter
+        const filterBtn = $('fact-filter-btn');
+        if (filterBtn) {
+            filterBtn.addEventListener('click', () => {
+                document.querySelectorAll('.fact-quick-btn').forEach(b => b.classList.remove('active'));
+                loadFacturasCustomRange();
+            });
+        }
+
+        // Modal close
+        const closeBtn = $('fact-modal-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => $('fact-modal').classList.add('hidden'));
+        const modal = $('fact-modal');
+        if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+
+        // Print
+        const printBtn = $('fact-print-btn');
+        if (printBtn) printBtn.addEventListener('click', () => window.print());
+
+        loadFacturas('today');
+    }
+
+    function getDateRange(range) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let from, to;
+        switch (range) {
+            case 'today':
+                from = today;
+                to = new Date(today.getTime() + 86400000);
+                break;
+            case 'week':
+                const day = today.getDay();
+                from = new Date(today.getTime() - day * 86400000);
+                to = new Date(today.getTime() + 86400000);
+                break;
+            case 'month':
+                from = new Date(today.getFullYear(), today.getMonth(), 1);
+                to = new Date(today.getTime() + 86400000);
+                break;
+            case 'all':
+                from = new Date(2024, 0, 1);
+                to = new Date(today.getTime() + 86400000);
+                break;
+            default:
+                from = today;
+                to = new Date(today.getTime() + 86400000);
+        }
+        return { from, to };
+    }
+
+    async function loadFacturas(range) {
+        const { from, to } = getDateRange(range);
+        await fetchInvoices(from, to);
+    }
+
+    async function loadFacturasCustomRange() {
+        const fromVal = $('fact-date-from').value;
+        const toVal = $('fact-date-to').value;
+        if (!fromVal || !toVal) { showToast('Selecciona ambas fechas', 'warning'); return; }
+        const from = new Date(fromVal + 'T00:00:00');
+        const to = new Date(toVal + 'T23:59:59');
+        await fetchInvoices(from, to);
+    }
+
+    async function fetchInvoices(from, to) {
+        try {
+            // Fetch orders (paid) and POS sales in parallel
+            const [ordersSnap, salesSnap] = await Promise.all([
+                db.collection('orders').where('createdAt', '>=', from).where('createdAt', '<=', to).orderBy('createdAt', 'desc').get(),
+                db.collection('sales').where('createdAt', '>=', from).where('createdAt', '<=', to).orderBy('createdAt', 'desc').get()
+            ]);
+
+            factInvoices = [];
+
+            ordersSnap.forEach(doc => {
+                const d = doc.data();
+                if (d.status === 'cancelado') return;
+                factInvoices.push({
+                    id: doc.id,
+                    type: 'order',
+                    number: d.number || doc.id,
+                    items: d.items || [],
+                    subtotal: d.subtotal || 0,
+                    delivery: d.delivery || 0,
+                    tip: d.tip || 0,
+                    discount: 0,
+                    total: d.total || 0,
+                    customer: d.customerName || 'Cliente',
+                    phone: d.customerPhone || '',
+                    address: d.address || '',
+                    method: d.paymentMethod || 'efectivo',
+                    status: d.status || 'pendiente',
+                    date: d.createdAt ? d.createdAt.toDate() : new Date()
+                });
+            });
+
+            salesSnap.forEach(doc => {
+                const d = doc.data();
+                factInvoices.push({
+                    id: doc.id,
+                    type: 'sale',
+                    number: 'POS-' + doc.id.substring(0, 6).toUpperCase(),
+                    items: d.items || [],
+                    subtotal: d.subtotal || 0,
+                    delivery: 0,
+                    tip: d.tip || 0,
+                    discount: d.discountAmount || 0,
+                    discountPct: d.discount || 0,
+                    total: d.total || 0,
+                    customer: 'Venta POS',
+                    method: d.paymentMethod || 'efectivo',
+                    status: 'completado',
+                    date: d.createdAt ? d.createdAt.toDate() : new Date()
+                });
+            });
+
+            // Sort by date desc
+            factInvoices.sort((a, b) => b.date - a.date);
+            renderFacturas();
+        } catch (err) {
+            console.error('Error loading invoices:', err);
+            $('fact-list').innerHTML = '<p class="no-orders">Error cargando facturas</p>';
+        }
+    }
+
+    function renderFacturas() {
+        const container = $('fact-list');
+        const countEl = $('fact-count');
+        const totalEl = $('fact-total-sales');
+        const avgEl = $('fact-avg');
+
+        if (!factInvoices.length) {
+            container.innerHTML = '<p class="no-orders">No hay facturas en este período</p>';
+            if (countEl) countEl.textContent = '0';
+            if (totalEl) totalEl.textContent = '$0.00';
+            if (avgEl) avgEl.textContent = '$0.00';
+            return;
+        }
+
+        const totalSales = factInvoices.reduce((s, inv) => s + inv.total, 0);
+        const avg = totalSales / factInvoices.length;
+
+        if (countEl) countEl.textContent = factInvoices.length;
+        if (totalEl) totalEl.textContent = '$' + totalSales.toFixed(2);
+        if (avgEl) avgEl.textContent = '$' + avg.toFixed(2);
+
+        container.innerHTML = factInvoices.map((inv, idx) => {
+            const dateStr = inv.date.toLocaleString('es-PA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const itemCount = inv.items.reduce((s, i) => s + (i.qty || i.quantity || 1), 0);
+            return `
+                <div class="fact-card" data-fact-idx="${idx}">
+                    <div class="fact-card-icon ${inv.type}">
+                        <i class="fas ${inv.type === 'order' ? 'fa-shopping-bag' : 'fa-cash-register'}"></i>
+                    </div>
+                    <div class="fact-card-info">
+                        <div class="fact-card-title">${inv.number}</div>
+                        <div class="fact-card-sub">${inv.customer} · ${itemCount} item${itemCount !== 1 ? 's' : ''}</div>
+                    </div>
+                    <span class="fact-card-method">${inv.method}</span>
+                    <span class="fact-card-amount">$${inv.total.toFixed(2)}</span>
+                    <span class="fact-card-date">${dateStr}</span>
+                </div>
+            `;
+        }).join('');
+
+        // Click to open detail
+        container.querySelectorAll('.fact-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const idx = parseInt(card.dataset.factIdx);
+                showInvoiceDetail(factInvoices[idx]);
+            });
+        });
+    }
+
+    function showInvoiceDetail(inv) {
+        const modal = $('fact-modal');
+        const titleEl = $('fact-modal-title');
+        const bodyEl = $('fact-modal-body');
+
+        titleEl.textContent = inv.number;
+
+        const dateStr = inv.date.toLocaleString('es-PA', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+        let itemsHtml = inv.items.map(item => {
+            const qty = item.qty || item.quantity || 1;
+            const price = item.total || (item.price * qty) || 0;
+            const size = item.size ? ` (${item.size})` : '';
+            return `
+                <div class="fact-inv-item">
+                    <span class="fact-inv-item-name">${item.emoji || ''} ${item.name}${size}</span>
+                    <span class="fact-inv-item-qty">x${qty}</span>
+                    <span class="fact-inv-item-total">$${price.toFixed(2)}</span>
+                </div>
+            `;
+        }).join('');
+
+        let totalsHtml = '';
+        if (inv.subtotal) totalsHtml += `<div class="fact-inv-total-line"><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>`;
+        if (inv.delivery > 0) totalsHtml += `<div class="fact-inv-total-line"><span>Delivery</span><span>$${inv.delivery.toFixed(2)}</span></div>`;
+        if (inv.discount > 0) totalsHtml += `<div class="fact-inv-total-line"><span>Descuento${inv.discountPct ? ` (${inv.discountPct}%)` : ''}</span><span>-$${inv.discount.toFixed(2)}</span></div>`;
+        if (inv.tip > 0) totalsHtml += `<div class="fact-inv-total-line"><span>Propina</span><span>$${inv.tip.toFixed(2)}</span></div>`;
+        totalsHtml += `<div class="fact-inv-total-line fact-inv-total-main"><span>Total</span><span>$${inv.total.toFixed(2)}</span></div>`;
+
+        bodyEl.innerHTML = `
+            <div class="fact-inv-header">
+                <div class="fact-inv-logo">XAZAI</div>
+                <div class="fact-inv-sub">Açai Bar & Smoothies</div>
+                <div class="fact-inv-number">${inv.number}</div>
+                <div class="fact-inv-date">${dateStr}</div>
+            </div>
+            ${inv.customer !== 'Venta POS' ? `<div style="font-size:12px;color:var(--text-light);margin-bottom:12px"><strong>Cliente:</strong> ${inv.customer}${inv.phone ? ' · ' + inv.phone : ''}${inv.address ? '<br><strong>Dirección:</strong> ' + inv.address : ''}</div>` : ''}
+            <div class="fact-inv-items">${itemsHtml}</div>
+            <div class="fact-inv-totals">${totalsHtml}</div>
+            <div style="font-size:11px;color:var(--text-light);margin-top:8px"><strong>Método de pago:</strong> ${inv.method}</div>
+            <div class="fact-inv-footer">¡Gracias por tu compra! 💜<br>XAZAI - Açai Bar & Smoothies</div>
+        `;
+
+        modal.classList.remove('hidden');
+    }
+
+    // Wire up facturacion section switching
+    document.addEventListener('click', (e) => {
+        const navBtn = e.target.closest('.admin-nav-btn[data-section="facturacion"]');
+        if (navBtn) {
+            initFacturacion();
         }
     });
 
