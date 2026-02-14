@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
-    <link rel="stylesheet" href="styles.css?v=20260214a">
+    <link rel="stylesheet" href="styles.css?v=20260214b">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -595,32 +595,32 @@
                 </div>
             </section>
 
-            <!-- Attendance Auto-Scan Overlay (inside admin-dashboard for z-index stacking) -->
-            <div class="att-scan-overlay hidden" id="att-scan-overlay">
-                <div class="att-scan-container">
-                    <button class="att-scan-close" id="att-scan-close"><i class="fas fa-times"></i></button>
-                    <div class="att-scan-viewport">
-                        <video id="att-scan-video" autoplay playsinline></video>
-                        <canvas id="att-scan-canvas" style="display:none"></canvas>
-                        <div class="att-face-guide"><div class="att-face-corners"></div></div>
-                        <div class="att-scan-line hidden" id="att-scan-line"></div>
-                        <div class="att-scan-pulse hidden" id="att-scan-pulse"></div>
-                        <div class="att-scan-status" id="att-scan-status">
-                            <span id="att-scan-status-text">Posiciona tu rostro en el centro</span>
-                        </div>
-                        <div class="att-scan-result hidden" id="att-scan-result">
-                            <i class="fas fa-check-circle" id="att-scan-result-icon"></i>
-                            <span id="att-scan-result-text">Identificado</span>
-                        </div>
+        </main>
+
+        <!-- Attendance Auto-Scan Overlay (direct child of admin-dashboard, outside <main> to avoid overflow:auto clipping) -->
+        <div class="att-scan-overlay hidden" id="att-scan-overlay">
+            <div class="att-scan-container">
+                <button class="att-scan-close" id="att-scan-close"><i class="fas fa-times"></i></button>
+                <div class="att-scan-viewport">
+                    <video id="att-scan-video" autoplay playsinline></video>
+                    <canvas id="att-scan-canvas" style="display:none"></canvas>
+                    <div class="att-face-guide"><div class="att-face-corners"></div></div>
+                    <div class="att-scan-line hidden" id="att-scan-line"></div>
+                    <div class="att-scan-pulse hidden" id="att-scan-pulse"></div>
+                    <div class="att-scan-status" id="att-scan-status">
+                        <span id="att-scan-status-text">Posiciona tu rostro en el centro</span>
                     </div>
-                    <div class="att-scan-info">
-                        <div class="att-scan-clock" id="att-scan-clock">--:--:--</div>
-                        <div class="att-scan-type entrada" id="att-scan-type"><i class="fas fa-sign-in-alt"></i> Entrada</div>
+                    <div class="att-scan-result hidden" id="att-scan-result">
+                        <i class="fas fa-check-circle" id="att-scan-result-icon"></i>
+                        <span id="att-scan-result-text">Identificado</span>
                     </div>
                 </div>
+                <div class="att-scan-info">
+                    <div class="att-scan-clock" id="att-scan-clock">--:--:--</div>
+                    <div class="att-scan-type entrada" id="att-scan-type"><i class="fas fa-sign-in-alt"></i> Entrada</div>
+                </div>
             </div>
-
-        </main>
+        </div>
     </div>
 
     <!-- ORDER CONFIRMATION -->
@@ -817,8 +817,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260214a"></script>
+    <script src="data.js?v=20260214b"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260214a"></script>
+    <script src="app.js?v=20260214b"></script>
 </body>
 </html>
