@@ -1851,6 +1851,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         token: result.token
                     });
 
+                    // Hide XAZAI payment modal so Yappy modal takes full screen
+                    $('payment-modal').classList.add('yappy-active');
                     $('yappy-loading').classList.add('hidden');
                 } else {
                     // Show error from backend
@@ -1878,7 +1880,8 @@ document.addEventListener('DOMContentLoaded', function() {
             updateCartUI();
             localStorage.removeItem('xazai_pending_order');
 
-            // Close payment modal and show confirmation
+            // Restore and close payment modal, show confirmation
+            $('payment-modal').classList.remove('yappy-active');
             closePaymentModal();
             orderNumber.textContent = orderId;
             confirmationOverlay.classList.remove('hidden');
@@ -1892,6 +1895,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Event: Payment failed/error
         btnYappy.addEventListener("eventError", (event) => {
             console.log("Yappy pago fallido:", event.detail);
+            $('payment-modal').classList.remove('yappy-active');
             $('yappy-error').classList.remove('hidden');
             $('yappy-error-msg').textContent = 'El pago no se completó. Intenta de nuevo.';
             showToast('El pago no se completó. Intenta de nuevo.', 'warning');
