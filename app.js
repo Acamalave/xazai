@@ -2699,6 +2699,14 @@ document.addEventListener('DOMContentLoaded', function() {
             $('pos-subtotal').textContent = '$0.00';
             $('pos-total').textContent = '$0.00';
             chargeBtn.disabled = true;
+            // Reset discount display
+            const discountDisplay = $('pos-discount-display');
+            if (discountDisplay) discountDisplay.classList.add('hidden');
+            // Reset cash fields
+            const cashInput = $('pos-cash-received');
+            if (cashInput) cashInput.value = '';
+            const changeDisplay = $('pos-change-amount');
+            if (changeDisplay) changeDisplay.textContent = '$0.00';
             return;
         }
 
