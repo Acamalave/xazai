@@ -11,7 +11,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <meta name="theme-color" content="#1a0a3e">
-    <link rel="stylesheet" href="styles.css?v=20260214h">
+    <link rel="stylesheet" href="styles.css?v=20260214i">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -158,13 +158,16 @@
             </div>
         </div>
         <div class="cart-footer" id="cart-footer">
-            <div class="cart-subtotal">
+            <div class="cart-subtotal hidden">
                 <span>Subtotal</span>
                 <span id="cart-subtotal">$0.00</span>
             </div>
             <div class="cart-total">
-                <span>Total</span>
+                <span>Total (sin envío)</span>
                 <span id="cart-total">$0.00</span>
+            </div>
+            <div class="cart-delivery-note">
+                <i class="fas fa-motorcycle"></i> El costo de envío se calcula al finalizar según tu ubicación
             </div>
             <button class="btn-checkout" id="btn-checkout">
                 <i class="fas fa-credit-card"></i> Finalizar Pedido
@@ -799,9 +802,9 @@
                     <span>Subtotal</span>
                     <span id="payment-subtotal">$0.00</span>
                 </div>
-                <div class="payment-line">
-                    <span><i class="fas fa-motorcycle"></i> Envío</span>
-                    <span id="payment-delivery">$4.50</span>
+                <div class="payment-line payment-line-delivery">
+                    <span><i class="fas fa-motorcycle"></i> Envío <small class="delivery-fee-info hidden" id="delivery-fee-info"></small></span>
+                    <span id="payment-delivery">Selecciona ubicación</span>
                 </div>
                 <div class="payment-line payment-line-tip">
                     <span><i class="fas fa-heart"></i> Propina</span>
@@ -962,8 +965,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260214h"></script>
+    <script src="data.js?v=20260214i"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260214h"></script>
+    <script src="app.js?v=20260214i"></script>
 </body>
 </html>

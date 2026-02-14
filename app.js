@@ -1501,7 +1501,7 @@ document.addEventListener('DOMContentLoaded', function() {
             floatingCheckout.classList.remove('hidden');
             floatingItems.textContent = totalItems + (totalItems === 1 ? ' item' : ' items');
             const subtotal = cart.reduce((s, i) => s + i.total, 0);
-            floatingTotal.textContent = '$' + (subtotal + 4.50).toFixed(2);
+            floatingTotal.textContent = '$' + subtotal.toFixed(2);
         } else {
             floatingCheckout.classList.add('hidden');
         }
@@ -1555,9 +1555,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         const subtotal = cart.reduce((s, i) => s + i.total, 0);
-        const deliveryFee = 4.50;
         cartSubtotal.textContent = '$' + subtotal.toFixed(2);
-        cartTotal.textContent = '$' + (subtotal + deliveryFee).toFixed(2);
+        cartTotal.textContent = '$' + subtotal.toFixed(2);
     }
 
     // ========================================
@@ -1628,11 +1627,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updatePaymentTotals() {
         const subtotal = cart.reduce((s, i) => s + i.total, 0);
-        const deliveryFee = 4.50;
-        const total = subtotal + deliveryFee + currentTip;
+        const total = subtotal + currentDeliveryFee + currentTip;
 
         $('payment-subtotal').textContent = '$' + subtotal.toFixed(2);
-        $('payment-delivery').textContent = '$' + deliveryFee.toFixed(2);
+        $('payment-delivery').textContent = currentDeliveryFee > 0 ? '$' + currentDeliveryFee.toFixed(2) : 'Selecciona ubicación';
         $('payment-tip-amount').textContent = '$' + currentTip.toFixed(2);
         $('payment-total').textContent = '$' + total.toFixed(2);
     }
@@ -1750,6 +1748,56 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ========================================
+    // DYNAMIC DELIVERY FEE (Distance-based pricing)
+    // ========================================
+    const STORE_LAT = 9.0141268;
+    const STORE_LNG = -79.4676096;
+    let currentDeliveryFee = 0;
+    let deliveryDistanceKm = 0;
+
+    // Haversine formula — distance in km between two lat/lng points
+    function haversineDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371; // Earth radius in km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    // PedidosYa-style tiered delivery pricing (Panama)
+    function calculateDeliveryFee(distanceKm) {
+        if (distanceKm <= 0) return 0;
+        if (distanceKm <= 2) return 2.00;
+        if (distanceKm <= 4) return 3.00;
+        if (distanceKm <= 6) return 4.00;
+        if (distanceKm <= 9) return 5.50;
+        if (distanceKm <= 12) return 7.00;
+        if (distanceKm <= 16) return 9.00;
+        return 12.00; // 16+ km
+    }
+
+    // Update delivery fee based on marker position
+    function updateDeliveryFeeFromMarker(lat, lng) {
+        deliveryDistanceKm = haversineDistance(STORE_LAT, STORE_LNG, lat, lng);
+        currentDeliveryFee = calculateDeliveryFee(deliveryDistanceKm);
+        updatePaymentTotals();
+
+        // Update delivery line with distance info
+        const deliveryEl = $('payment-delivery');
+        if (deliveryEl) {
+            deliveryEl.textContent = '$' + currentDeliveryFee.toFixed(2);
+        }
+        const deliveryInfoEl = $('delivery-fee-info');
+        if (deliveryInfoEl) {
+            deliveryInfoEl.textContent = `${deliveryDistanceKm.toFixed(1)} km desde Xazai`;
+            deliveryInfoEl.classList.remove('hidden');
+        }
+    }
+
+    // ========================================
     // DELIVERY MAP (Leaflet + OpenStreetMap)
     // ========================================
     let mapInitialized = false;
@@ -1807,10 +1855,10 @@ document.addEventListener('DOMContentLoaded', function() {
             container.appendChild(mapDiv);
         }
 
-        // Initialize Leaflet map centered on Panama City
+        // Initialize Leaflet map centered on Xazai store
         deliveryMap = L.map(mapDiv, {
-            center: [8.9824, -79.5199],
-            zoom: 13,
+            center: [STORE_LAT, STORE_LNG],
+            zoom: 14,
             zoomControl: false
         });
 
@@ -1820,6 +1868,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Add zoom control to bottom right
         L.control.zoom({ position: 'bottomright' }).addTo(deliveryMap);
+
+        // Store marker icon
+        const storeIcon = L.divIcon({
+            className: 'store-map-marker',
+            html: '<div style="background:linear-gradient(135deg,#7c3aed,#e91e8c);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"><i class="fas fa-store" style="font-size:14px;color:white"></i></div>',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+        });
+        L.marker([STORE_LAT, STORE_LNG], { icon: storeIcon }).addTo(deliveryMap)
+            .bindPopup('<strong>Xazai Açaí Bar</strong><br>Punto de origen');
 
         // Custom marker icon
         const markerIcon = L.divIcon({
@@ -1833,6 +1891,9 @@ document.addEventListener('DOMContentLoaded', function() {
         deliveryMap.on('click', function(e) {
             if (mapMarker) deliveryMap.removeLayer(mapMarker);
             mapMarker = L.marker(e.latlng, { icon: markerIcon }).addTo(deliveryMap);
+
+            // Calculate delivery fee from distance
+            updateDeliveryFeeFromMarker(e.latlng.lat, e.latlng.lng);
 
             // Reverse geocode
             fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${e.latlng.lat}&lon=${e.latlng.lng}&zoom=18&addressdetails=1`)
@@ -1871,6 +1932,8 @@ document.addEventListener('DOMContentLoaded', function() {
             mapMarker = L.marker([lat, lng], { icon: markerIcon }).addTo(deliveryMap);
             searchInput.value = name;
             hideSuggestions();
+            // Calculate delivery fee from distance
+            updateDeliveryFeeFromMarker(lat, lng);
         }
 
         function performSearch(query) {
@@ -1951,6 +2014,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (mapMarker) deliveryMap.removeLayer(mapMarker);
                     mapMarker = L.marker([latitude, longitude], { icon: markerIcon }).addTo(deliveryMap);
 
+                    // Calculate delivery fee from user location
+                    updateDeliveryFeeFromMarker(latitude, longitude);
+
                     // Reverse geocode user position
                     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`)
                         .then(r => r.json())
@@ -1994,6 +2060,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Event: Click on Yappy button
         btnYappy.addEventListener('eventClick', async () => {
+            // Validate delivery location on map
+            if (!mapMarker || currentDeliveryFee <= 0) {
+                showToast('Selecciona tu ubicación de entrega en el mapa', 'error');
+                const mapEl = $('map-container');
+                if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth' });
+                return;
+            }
             // Validate delivery address
             const deliveryAddress = $('delivery-address') ? $('delivery-address').value.trim() : '';
             if (!deliveryAddress) {
@@ -2015,7 +2088,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Prepare order data
             const subtotal = cart.reduce((s, i) => s + i.total, 0);
-            const deliveryFee = 4.50;
+            const deliveryFee = currentDeliveryFee;
             const total = subtotal + deliveryFee + currentTip;
             orderCounter++;
             localStorage.setItem('xazai_orderCounter', orderCounter);
@@ -2144,7 +2217,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function saveOrderToFirestore(orderId, address, status, total, subtotal) {
         if (typeof db === 'undefined') return;
-        const deliveryFee = 4.50;
+        const deliveryFee = currentDeliveryFee;
         // Sanitize cart items to remove any undefined values
         const sanitizedItems = cart.map(i => ({
             name: i.name || '',
@@ -2167,6 +2240,7 @@ document.addEventListener('DOMContentLoaded', function() {
             items: sanitizedItems,
             subtotal: subtotal || cart.reduce((s, i) => s + i.total, 0),
             delivery: deliveryFee,
+            deliveryDistance: deliveryDistanceKm || 0,
             tip: currentTip || 0,
             total: total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + (currentTip || 0)),
             status: status,
@@ -2236,6 +2310,13 @@ document.addEventListener('DOMContentLoaded', function() {
     function processOrderDirect() {
         // Process order and save to Firestore
         if (cart.length === 0) return;
+        // Validate delivery location on map
+        if (!mapMarker || currentDeliveryFee <= 0) {
+            showToast('Selecciona tu ubicación de entrega en el mapa', 'error');
+            const mapEl = $('map-container');
+            if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth' });
+            return;
+        }
         const deliveryAddress = $('delivery-address') ? $('delivery-address').value.trim() : '';
         if (!deliveryAddress) {
             showToast('Por favor ingresa tu dirección de entrega', 'error');
@@ -2245,14 +2326,14 @@ document.addEventListener('DOMContentLoaded', function() {
         orderCounter++;
         localStorage.setItem('xazai_orderCounter', orderCounter);
         const subtotal = cart.reduce((s, i) => s + i.total, 0);
-        const deliveryFee = 4.50;
+        const deliveryFee = currentDeliveryFee;
         const orderNum = `XZ-${orderCounter}`;
         const orderData = {
             number: orderNum,
             customerName: currentUser ? currentUser.name : 'Invitado',
             customerPhone: currentUser ? (currentUser.phone || '') : '',
             items: cart.map(i => ({ name: i.name, emoji: i.emoji, size: i.size, quantity: i.quantity, toppings: i.toppings, total: i.total })),
-            subtotal, delivery: deliveryFee, tip: currentTip,
+            subtotal, delivery: deliveryFee, deliveryDistance: deliveryDistanceKm, tip: currentTip,
             total: subtotal + deliveryFee + currentTip,
             address: deliveryAddress,
             scheduled: scheduledSlot ? `${scheduledSlot.label} ${scheduledSlot.time}` : null,

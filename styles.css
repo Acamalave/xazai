@@ -1401,9 +1401,24 @@ body {
     font-size: 20px;
     font-weight: 700;
     color: var(--text-white);
-    margin-bottom: 16px;
+    margin-bottom: 8px;
     padding-top: 10px;
     border-top: 1px solid var(--border);
+}
+
+.cart-delivery-note {
+    font-size: 11px;
+    color: var(--text-light);
+    text-align: center;
+    padding: 6px 10px;
+    background: rgba(233, 30, 140, 0.06);
+    border-radius: 6px;
+    margin-bottom: 12px;
+    line-height: 1.4;
+}
+.cart-delivery-note i {
+    color: var(--accent);
+    margin-right: 4px;
 }
 
 .btn-checkout {
@@ -3811,6 +3826,17 @@ body {
 .payment-line-subtotal {
     border-top: 1px solid rgba(255,255,255,0.06);
     padding-top: 10px;
+}
+
+.payment-line-delivery .delivery-fee-info {
+    font-size: 10px;
+    color: var(--accent);
+    font-weight: 400;
+    margin-left: 6px;
+}
+.payment-line-delivery #payment-delivery {
+    font-weight: 600;
+    transition: all 0.3s ease;
 }
 
 .payment-line-total {
