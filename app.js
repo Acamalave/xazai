@@ -2095,6 +2095,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let posCart = [];
     let posPaymentMethod = 'efectivo';
     let posTipAmount = 0;
+    let posDiscountPercent = 0;
     let todaySales = [];
     let notificationSound = null;
 
@@ -2455,7 +2456,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const catsContainer = $('pos-categories');
         const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
         catsContainer.innerHTML = `<button class="pos-cat-btn active" data-cat="all">Todos</button>` +
-            cats.map(catKey => `<button class="pos-cat-btn" data-cat="${catKey}"><i class="fas ${CATEGORIES[catKey].icon}"></i> ${CATEGORIES[catKey].name}</button>`).join('');
+            cats.map(catKey => `<button class="pos-cat-btn" data-cat="${catKey}"><i class="fas ${CATEGORIES[catKey].icon}"></i> ${CATEGORIES[catKey].name}</button>`).join('') +
+            `<button class="pos-cat-btn" data-cat="extras"><i class="fas fa-plus-circle"></i> Extras</button>`;
 
         catsContainer.addEventListener('click', (e) => {
             const btn = e.target.closest('.pos-cat-btn');
@@ -2502,13 +2504,38 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        // Discount buttons
+        document.querySelectorAll('.pos-discount-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.pos-discount-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const discVal = btn.dataset.discount;
+                if (discVal === 'custom') {
+                    $('pos-discount-custom').classList.remove('hidden');
+                    posDiscountPercent = parseFloat($('pos-discount-amount').value) || 0;
+                } else {
+                    $('pos-discount-custom').classList.add('hidden');
+                    posDiscountPercent = parseFloat(discVal) || 0;
+                }
+                renderPOSInvoice();
+            });
+        });
+        const discountCustomInput = $('pos-discount-amount');
+        if (discountCustomInput) {
+            discountCustomInput.addEventListener('input', () => {
+                posDiscountPercent = Math.min(100, Math.max(0, parseFloat(discountCustomInput.value) || 0));
+                renderPOSInvoice();
+            });
+        }
+
         // Cash received input
         const cashInput = $('pos-cash-received');
         if (cashInput) {
             cashInput.addEventListener('input', () => {
                 const received = parseFloat(cashInput.value) || 0;
                 const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
-                const total = subtotal + posTipAmount;
+                const discountAmt = subtotal * (posDiscountPercent / 100);
+                const total = (subtotal - discountAmt) + posTipAmount;
                 const change = received - total;
                 $('pos-change-amount').textContent = change >= 0 ? '$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
                 $('pos-change-amount').style.color = change >= 0 ? '#00e096' : '#ff6b6b';
@@ -2519,10 +2546,15 @@ document.addEventListener('DOMContentLoaded', function() {
         $('pos-clear').addEventListener('click', () => {
             posCart = [];
             posTipAmount = 0;
+            posDiscountPercent = 0;
             document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
             document.querySelector('.pos-tip-btn[data-tip="0"]').classList.add('active');
             $('pos-tip-custom').classList.add('hidden');
             if ($('pos-tip-amount')) $('pos-tip-amount').value = '';
+            document.querySelectorAll('.pos-discount-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.pos-discount-btn[data-discount="0"]').classList.add('active');
+            $('pos-discount-custom').classList.add('hidden');
+            if ($('pos-discount-amount')) $('pos-discount-amount').value = '';
             renderPOSInvoice();
         });
 
@@ -2532,10 +2564,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderPOSProducts(category) {
         const container = $('pos-products-grid');
-        const items = category === 'all' ? MENU_ITEMS : MENU_ITEMS.filter(i => i.category === category);
-        container.innerHTML = items.map(item => {
+
+        // Build list of menu items
+        let menuItems = [];
+        if (category === 'extras') {
+            menuItems = [];
+        } else if (category === 'all') {
+            menuItems = MENU_ITEMS;
+        } else {
+            menuItems = MENU_ITEMS.filter(i => i.category === category);
+        }
+
+        // Build list of extra toppings
+        let extraItems = [];
+        if (category === 'extras' || category === 'all') {
+            extraItems = EXTRA_TOPPINGS;
+        }
+
+        // Render menu items
+        let html = menuItems.map(item => {
             const isAvailable = isProductAvailable(item.id);
-            // Has two sizes: priceGrande exists AND not onlyGrande
             const hasSizes = item.priceGrande != null && !item.onlyGrande;
             const displayPrice = item.price;
             return `
@@ -2558,7 +2606,23 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>`;
         }).join('');
 
-        container.querySelectorAll('.pos-product-card:not(.disabled)').forEach(card => {
+        // Render extras/toppings
+        if (extraItems.length > 0) {
+            if (menuItems.length > 0) {
+                html += `<div class="pos-extras-divider">Extras / Toppings</div>`;
+            }
+            html += extraItems.map(item => `
+                <div class="pos-product-card pos-extra-card" data-extra-id="${item.id}">
+                    <span class="pos-product-emoji">${item.emoji}</span>
+                    <span class="pos-product-name">${item.name}</span>
+                    <span class="pos-product-price">$${item.price.toFixed(2)}</span>
+                </div>
+            `).join('');
+        }
+
+        container.innerHTML = html;
+
+        container.querySelectorAll('.pos-product-card:not(.disabled):not(.pos-extra-card)').forEach(card => {
             card.addEventListener('click', (e) => {
                 // Don't trigger if clicking size picker buttons
                 if (e.target.closest('.pos-size-picker')) return;
@@ -2572,6 +2636,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     const product = MENU_ITEMS.find(i => i.id === productId);
                     addToPOSCart(productId, '', product.price);
                 }
+            });
+        });
+
+        // Extra/topping card click handlers
+        container.querySelectorAll('.pos-extra-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const extraId = card.dataset.extraId;
+                const extra = EXTRA_TOPPINGS.find(t => t.id === extraId);
+                if (extra) addToPOSCart(extraId, '', extra.price);
             });
         });
 
@@ -2598,7 +2671,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function addToPOSCart(productId, size = '', price = null) {
-        const product = MENU_ITEMS.find(i => i.id === productId);
+        // Support both menu items (numeric id) and extras (string id like 't1')
+        let product;
+        if (typeof productId === 'string' && productId.startsWith('t')) {
+            product = EXTRA_TOPPINGS.find(t => t.id === productId);
+        } else {
+            product = MENU_ITEMS.find(i => i.id === productId);
+        }
         if (!product) return;
         const finalPrice = price !== null ? price : product.price;
         // Match by productId + size for duplicates
@@ -2641,9 +2720,21 @@ document.addEventListener('DOMContentLoaded', function() {
         `).join('');
 
         const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
-        const totalWithTip = subtotal + posTipAmount;
+        const discountAmount = subtotal * (posDiscountPercent / 100);
+        const subtotalAfterDiscount = subtotal - discountAmount;
+        const totalWithTip = subtotalAfterDiscount + posTipAmount;
         $('pos-subtotal').textContent = '$' + subtotal.toFixed(2);
         $('pos-total').textContent = '$' + totalWithTip.toFixed(2);
+
+        // Update discount display
+        const discountDisplay = $('pos-discount-display');
+        if (posDiscountPercent > 0) {
+            discountDisplay.classList.remove('hidden');
+            $('pos-discount-pct').textContent = posDiscountPercent;
+            $('pos-discount-value').textContent = '-$' + discountAmount.toFixed(2);
+        } else {
+            discountDisplay.classList.add('hidden');
+        }
 
         // Bind qty buttons
         container.querySelectorAll('[data-pos-action]').forEach(btn => {
@@ -2678,11 +2769,15 @@ document.addEventListener('DOMContentLoaded', function() {
     function processPOSSale() {
         if (posCart.length === 0) return;
         const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
-        const total = subtotal + posTipAmount;
+        const discountAmount = subtotal * (posDiscountPercent / 100);
+        const subtotalAfterDiscount = subtotal - discountAmount;
+        const total = subtotalAfterDiscount + posTipAmount;
 
         const sale = {
             items: posCart.map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, size: i.size || '', total: i.price * i.qty })),
             subtotal,
+            discount: posDiscountPercent,
+            discountAmount: discountAmount,
             tip: posTipAmount,
             total,
             paymentMethod: posPaymentMethod,
@@ -2691,14 +2786,20 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         db.collection('sales').add(sale).then(() => {
+            const discMsg = posDiscountPercent > 0 ? ` -${posDiscountPercent}%` : '';
             const tipMsg = posTipAmount > 0 ? ` + propina $${posTipAmount.toFixed(2)}` : '';
-            showToast(`Venta registrada: $${total.toFixed(2)} (${posPaymentMethod}${tipMsg})`, 'success');
+            showToast(`Venta registrada: $${total.toFixed(2)} (${posPaymentMethod}${discMsg}${tipMsg})`, 'success');
             posCart = [];
             posTipAmount = 0;
+            posDiscountPercent = 0;
             document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
             document.querySelector('.pos-tip-btn[data-tip="0"]').classList.add('active');
             $('pos-tip-custom').classList.add('hidden');
             if ($('pos-tip-amount')) $('pos-tip-amount').value = '';
+            document.querySelectorAll('.pos-discount-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.pos-discount-btn[data-discount="0"]').classList.add('active');
+            $('pos-discount-custom').classList.add('hidden');
+            if ($('pos-discount-amount')) $('pos-discount-amount').value = '';
             renderPOSInvoice();
             const cashInput = $('pos-cash-received');
             if (cashInput) { cashInput.value = ''; $('pos-change-amount').textContent = '$0.00'; }

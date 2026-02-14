@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
-    <link rel="stylesheet" href="styles.css?v=20260213f">
+    <link rel="stylesheet" href="styles.css?v=20260213g">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -288,6 +288,22 @@
                         </div>
                         <div class="pos-invoice-totals">
                             <div class="pos-total-line"><span>Subtotal</span><span id="pos-subtotal">$0.00</span></div>
+                            <div class="pos-discount-section">
+                                <span class="pos-discount-label">Descuento</span>
+                                <div class="pos-discount-options">
+                                    <button class="pos-discount-btn active" data-discount="0">Sin</button>
+                                    <button class="pos-discount-btn" data-discount="15">15% <small>Jubilado</small></button>
+                                    <button class="pos-discount-btn" data-discount="10">10%</button>
+                                    <button class="pos-discount-btn" data-discount="custom">Otro</button>
+                                </div>
+                                <div class="pos-discount-custom hidden" id="pos-discount-custom">
+                                    <div class="pos-cash-input-wrap"><span>%</span><input type="number" id="pos-discount-amount" placeholder="0" min="0" max="100" step="1"></div>
+                                </div>
+                            </div>
+                            <div class="pos-total-line pos-discount-line hidden" id="pos-discount-display">
+                                <span>Descuento (<span id="pos-discount-pct">0</span>%)</span>
+                                <span id="pos-discount-value" class="pos-discount-savings">-$0.00</span>
+                            </div>
                             <div class="pos-tip-section">
                                 <span class="pos-tip-label">Propina</span>
                                 <div class="pos-tip-options">
@@ -611,8 +627,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260213f"></script>
+    <script src="data.js?v=20260213g"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260213f"></script>
+    <script src="app.js?v=20260213g"></script>
 </body>
 </html>

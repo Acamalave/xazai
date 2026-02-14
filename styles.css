@@ -2857,6 +2857,40 @@ body {
 .pos-tip-custom { margin-top: 4px; }
 .pos-tip-custom .pos-cash-input-wrap { max-width: 120px; }
 
+/* POS Discount Section */
+.pos-discount-section { display: flex; align-items: center; gap: 8px; padding: 8px 0; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.pos-discount-label { font-size: 13px; color: var(--text-light); min-width: 65px; }
+.pos-discount-options { display: flex; gap: 4px; flex-wrap: wrap; }
+.pos-discount-btn { padding: 4px 10px; border-radius: 16px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 12px; transition: var(--transition); }
+.pos-discount-btn small { font-size: 9px; opacity: 0.7; display: block; margin-top: -1px; }
+.pos-discount-btn.active { background: linear-gradient(135deg, #00c853, #00e096); border-color: #00e096; color: white; }
+.pos-discount-btn.active small { opacity: 1; }
+.pos-discount-custom { margin-top: 4px; }
+.pos-discount-custom .pos-cash-input-wrap { max-width: 100px; }
+.pos-discount-line { color: #00e096 !important; }
+.pos-discount-savings { color: #00e096 !important; font-weight: 600; }
+
+/* POS Extras Divider */
+.pos-extras-divider {
+    grid-column: 1 / -1;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    padding: 8px 0 4px;
+    border-top: 1px solid var(--border);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* POS Extra Card */
+.pos-extra-card {
+    border-color: rgba(194, 120, 236, 0.3) !important;
+}
+.pos-extra-card:hover {
+    border-color: var(--accent) !important;
+}
+
 /* Inventory Tabs */
 .inv-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
 .inv-tab-btn { padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 14px; transition: var(--transition); }
