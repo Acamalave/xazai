@@ -4452,7 +4452,7 @@ body {
 .att-start-scan-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 30px rgba(233, 30, 140, 0.5); }
 
 /* Scan Overlay */
-.att-scan-overlay { position: fixed; inset: 0; background: #000; z-index: 250; display: flex; align-items: center; justify-content: center; }
+.att-scan-overlay { position: fixed; inset: 0; background: #000; z-index: 1100; display: flex; align-items: center; justify-content: center; }
 .att-scan-overlay.hidden { display: none; }
 .att-scan-container { width: 100%; max-width: 500px; position: relative; padding: 0 16px; }
 .att-scan-close { position: absolute; top: 8px; right: 24px; z-index: 20; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255,255,255,0.2); color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: var(--transition); }
