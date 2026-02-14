@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
-    <link rel="stylesheet" href="styles.css?v=20260214c">
+    <link rel="stylesheet" href="styles.css?v=20260214d">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -264,11 +264,27 @@
             <section id="admin-sec-orders" class="admin-section">
                 <div class="admin-section-header">
                     <h2><i class="fas fa-receipt"></i> Pedidos en Tiempo Real</h2>
+                    <div class="store-toggle" id="store-toggle">
+                        <span class="store-toggle-label">Estado del negocio:</span>
+                        <button class="store-toggle-btn active" data-store-status="auto">
+                            <i class="fas fa-clock"></i> Automático
+                        </button>
+                        <button class="store-toggle-btn" data-store-status="abierto">
+                            <i class="fas fa-door-open"></i> Abierto
+                        </button>
+                        <button class="store-toggle-btn" data-store-status="cerrado">
+                            <i class="fas fa-door-closed"></i> Cerrado
+                        </button>
+                        <button class="store-toggle-btn" data-store-status="alta_demanda">
+                            <i class="fas fa-fire"></i> Alta Demanda
+                        </button>
+                    </div>
                     <div class="orders-filter" id="admin-orders-filter">
                         <button class="filter-btn active" data-status="all">Todos</button>
                         <button class="filter-btn" data-status="pendiente">Pendientes</button>
                         <button class="filter-btn" data-status="preparando">Preparando</button>
                         <button class="filter-btn" data-status="listo">Listos</button>
+                        <button class="filter-btn" data-status="en_camino">En Camino</button>
                         <button class="filter-btn" data-status="entregado">Entregados</button>
                         <button class="filter-btn" data-status="cancelado">Cancelados</button>
                     </div>
@@ -678,6 +694,25 @@
         </div>
     </div>
 
+    <!-- RATING MODAL -->
+    <div class="rating-overlay hidden" id="rating-overlay">
+        <div class="rating-modal">
+            <div class="rating-icon"><i class="fas fa-star"></i></div>
+            <h2>¿Cómo estuvo tu pedido?</h2>
+            <p class="rating-order-ref" id="rating-order-ref"></p>
+            <div class="rating-stars" id="rating-stars">
+                <i class="fas fa-star" data-star="1"></i>
+                <i class="fas fa-star" data-star="2"></i>
+                <i class="fas fa-star" data-star="3"></i>
+                <i class="fas fa-star" data-star="4"></i>
+                <i class="fas fa-star" data-star="5"></i>
+            </div>
+            <textarea id="rating-comment" placeholder="Cuéntanos tu experiencia (opcional)" maxlength="200"></textarea>
+            <button class="btn-rating-submit" id="btn-rating-submit" disabled>Enviar Calificación</button>
+            <button class="btn-rating-skip" id="btn-rating-skip">Ahora no</button>
+        </div>
+    </div>
+
     <!-- PAYMENT MODAL (Yappy) -->
     <div class="modal-overlay hidden" id="payment-modal">
         <div class="payment-modal-content">
@@ -861,8 +896,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260214c"></script>
+    <script src="data.js?v=20260214d"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260214c"></script>
+    <script src="app.js?v=20260214d"></script>
 </body>
 </html>

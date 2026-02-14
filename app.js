@@ -105,6 +105,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const misPedidosSection = $('mis-pedidos-section');
     const tabMisPedidos = $('tab-mis-pedidos');
 
+    // Store status override (Firestore-synced)
+    let storeStatusOverride = 'auto';
+    let ratingDismissed = new Set();
+    let selectedRating = 0;
+    let currentRatingOrderId = null;
+
     // ========================================
     // BUSINESS HOURS & STATUS
     // ========================================
@@ -119,6 +125,11 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function isStoreOpen() {
+        // Manual override from admin
+        if (storeStatusOverride === 'abierto') return true;
+        if (storeStatusOverride === 'cerrado') return false;
+        if (storeStatusOverride === 'alta_demanda') return true; // Open but with warning
+        // 'auto' → schedule-based logic
         const now = new Date();
         const day = now.getDay();
         const hours = BUSINESS_HOURS[day];
@@ -128,6 +139,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function getStoreStatusText() {
+        // Manual overrides
+        if (storeStatusOverride === 'abierto') return { open: true, text: 'Abierto' };
+        if (storeStatusOverride === 'cerrado') return { open: false, text: 'Cerrado' };
+        if (storeStatusOverride === 'alta_demanda') return { open: true, text: 'Alta Demanda', highDemand: true };
+
+        // Auto → schedule-based
         const now = new Date();
         const day = now.getDay();
         const hours = BUSINESS_HOURS[day];
@@ -162,14 +179,56 @@ document.addEventListener('DOMContentLoaded', function() {
         const textEl = $('status-text');
         const status = getStoreStatusText();
 
-        statusEl.classList.remove('open', 'closed');
-        statusEl.classList.add(status.open ? 'open' : 'closed');
+        statusEl.classList.remove('open', 'closed', 'alta-demanda');
+        if (status.highDemand) {
+            statusEl.classList.add('alta-demanda');
+        } else {
+            statusEl.classList.add(status.open ? 'open' : 'closed');
+        }
         textEl.textContent = status.text;
+
+        // Sync admin toggle buttons if visible
+        const toggleBtns = document.querySelectorAll('.store-toggle-btn');
+        if (toggleBtns.length) {
+            toggleBtns.forEach(b => {
+                b.classList.toggle('active', b.dataset.storeStatus === storeStatusOverride);
+            });
+        }
     }
 
     // Update status every minute
     updateStoreStatus();
     setInterval(updateStoreStatus, 60000);
+
+    // Firestore listener for store status override (real-time sync)
+    if (typeof db !== 'undefined') {
+        db.collection('settings').doc('storeStatus').onSnapshot(doc => {
+            storeStatusOverride = doc.exists ? (doc.data().override || 'auto') : 'auto';
+            updateStoreStatus();
+        }, err => {
+            console.warn('Store status listener error:', err);
+        });
+    }
+
+    // Admin store toggle event listeners
+    document.addEventListener('click', (e) => {
+        const toggleBtn = e.target.closest('.store-toggle-btn');
+        if (!toggleBtn) return;
+        const newStatus = toggleBtn.dataset.storeStatus;
+        if (!newStatus) return;
+
+        // Update Firestore
+        db.collection('settings').doc('storeStatus').set({
+            override: newStatus,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedBy: currentUser ? currentUser.name : 'admin'
+        }).then(() => {
+            showToast(`Estado del negocio: ${newStatus === 'auto' ? 'Automático' : newStatus === 'alta_demanda' ? 'Alta Demanda' : newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`, 'success');
+        }).catch(err => {
+            showToast('Error actualizando estado', 'warning');
+            console.error(err);
+        });
+    });
 
     // ========================================
     // SCHEDULE ORDER (when closed)
@@ -368,6 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show customer features if has phone
             if (currentUser.phone && currentUser.role !== 'admin') {
                 showMisPedidosTab();
+                startCustomerOrdersListener(currentUser.phone);
                 loadCustomerOrderHistory(currentUser.phone).then(() => {
                     const activeTab = document.querySelector('.tab.active');
                     if (activeTab && activeTab.dataset.category === 'inicio') {
@@ -624,13 +684,27 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             customerActiveOrders = allOrders.filter(o =>
-                ['pendiente', 'preparando', 'listo'].includes(o.status)
+                ['pendiente', 'preparando', 'listo', 'en_camino'].includes(o.status)
             );
             customerPastOrders = allOrders.filter(o =>
                 ['entregado', 'cancelado'].includes(o.status)
             );
 
             renderMisPedidos();
+
+            // Refresh home tracker if viewing inicio
+            const activeTab = document.querySelector('.tab.active');
+            if (activeTab && activeTab.dataset.category === 'inicio') {
+                renderAllProducts();
+            }
+
+            // Auto-show rating for recently delivered orders
+            const justDelivered = allOrders.find(o =>
+                o.status === 'entregado' && !o.rating && !o.ratedAt && !ratingDismissed.has(o.id)
+            );
+            if (justDelivered) {
+                setTimeout(() => showRatingModal(justDelivered), 1500);
+            }
         }, err => {
             console.error('Error listening to customer orders:', err);
         });
@@ -672,9 +746,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const isCancelled = order.status === 'cancelado';
 
         // Status stepper for active orders
-        const steps = ['pendiente', 'preparando', 'listo', 'entregado'];
-        const stepLabels = ['Recibido', 'Preparando', 'Listo', 'Entregado'];
-        const stepIcons = ['fa-inbox', 'fa-fire-burner', 'fa-bell', 'fa-check-double'];
+        const steps = ['pendiente', 'preparando', 'listo', 'en_camino', 'entregado'];
+        const stepLabels = ['Recibido', 'Preparando', 'Listo', 'En Camino', 'Entregado'];
+        const stepIcons = ['fa-inbox', 'fa-fire-burner', 'fa-bell', 'fa-motorcycle', 'fa-check-double'];
         const currentStepIdx = steps.indexOf(order.status);
 
         let stepperHTML = '';
@@ -702,6 +776,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pendiente: 'Recibido',
             preparando: 'Preparando',
             listo: 'Listo',
+            en_camino: 'En Camino',
             entregado: 'Entregado',
             cancelado: 'Cancelado'
         };
@@ -725,8 +800,24 @@ document.addEventListener('DOMContentLoaded', function() {
                     <span class="mp-order-total">Total: $${(order.total || 0).toFixed(2)}</span>
                 </div>
                 ${isCancelled && order.cancelReason ? `<div class="mp-cancel-reason"><i class="fas fa-ban"></i> ${order.cancelReason}</div>` : ''}
+                ${order.status === 'entregado' ? buildRatingSection(order) : ''}
             </div>
         `;
+    }
+
+    function buildRatingSection(order) {
+        if (order.rating) {
+            // Show existing rating (read-only)
+            let stars = '';
+            for (let i = 1; i <= 5; i++) {
+                stars += `<i class="fas fa-star ${i <= order.rating ? 'filled' : ''}"></i>`;
+            }
+            return `<div class="mp-rating-display">${stars}</div>`;
+        }
+        // Show "Rate" button
+        return `<button class="mp-rate-btn" data-rate-order="${order.id}" data-rate-number="${order.number || ''}">
+            <i class="fas fa-star"></i> Calificar pedido
+        </button>`;
     }
 
     // ========================================
@@ -771,12 +862,117 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // PRODUCTS - Horizontal cards with inline expand
     // ========================================
+    // ========================================
+    // HOME ORDER TRACKER (animated)
+    // ========================================
+    function renderHomeOrderTracker(order) {
+        const trackerSteps = [
+            { status: 'pendiente', icon: 'fa-inbox', label: 'Recibido', msg: 'Tu orden fue recibida exitosamente' },
+            { status: 'preparando', icon: 'fa-fire-burner', label: 'Preparando', msg: 'Nuestro equipo está preparando tu pedido' },
+            { status: 'en_camino', icon: 'fa-motorcycle', label: 'En Camino', msg: 'Tu pedido va en camino hacia ti' },
+            { status: 'entregado', icon: 'fa-check-double', label: 'Entregado', msg: '¡Pedido entregado! ¡Buen provecho!' }
+        ];
+
+        // Map listo → same index as en_camino (step 2) but shows as active/preparing
+        const statusToIdx = {
+            'pendiente': 0,
+            'preparando': 1,
+            'listo': 2, // Listo maps to before en_camino (shows as preparing done, en_camino next)
+            'en_camino': 2,
+            'entregado': 3
+        };
+
+        const currentIdx = statusToIdx[order.status] !== undefined ? statusToIdx[order.status] : 0;
+        const isListo = order.status === 'listo';
+
+        // Time elapsed
+        let timeText = '';
+        if (order.createdAt && order.createdAt.seconds) {
+            const elapsed = Math.floor((Date.now() - order.createdAt.seconds * 1000) / 60000);
+            if (elapsed < 1) timeText = 'Hace un momento';
+            else if (elapsed < 60) timeText = `Hace ${elapsed} min`;
+            else timeText = `Hace ${Math.floor(elapsed / 60)} hr ${elapsed % 60} min`;
+        }
+
+        // Items summary
+        const items = order.items || [];
+        const itemsSummary = items.slice(0, 3).map(i =>
+            `${i.emoji || '📦'} ${i.name}`
+        ).join(' · ') + (items.length > 3 ? ` +${items.length - 3} más` : '');
+
+        // Current message
+        let currentMsg = '';
+        if (isListo) {
+            currentMsg = 'Tu pedido está listo, pronto saldrá en camino';
+        } else {
+            currentMsg = trackerSteps[currentIdx].msg;
+        }
+
+        let stepsHTML = '';
+        trackerSteps.forEach((step, idx) => {
+            let cls = '';
+            if (idx < currentIdx) cls = 'completed';
+            else if (idx === currentIdx) {
+                cls = isListo && idx === 2 ? 'pending' : 'active';
+                // If listo, mark step 1 (preparando) as completed instead
+                if (isListo && idx === 2) cls = 'pending';
+            } else cls = 'pending';
+
+            // For listo status: steps 0,1 completed, step 2 (en_camino) pending with special state
+            if (isListo) {
+                if (idx < 2) cls = 'completed';
+                else if (idx === 2) cls = 'active'; // Show en_camino as "next up" with pulse
+                else cls = 'pending';
+            }
+
+            stepsHTML += `
+                <div class="ht-step ${cls}">
+                    <div class="ht-step-icon"><i class="fas ${step.icon}"></i></div>
+                    <span class="ht-step-label">${step.label}</span>
+                </div>
+            `;
+
+            if (idx < trackerSteps.length - 1) {
+                let lineCls = '';
+                if (isListo) {
+                    lineCls = idx < 1 ? 'completed' : (idx === 1 ? 'active' : 'pending');
+                } else {
+                    lineCls = idx < currentIdx ? 'completed' : (idx === currentIdx ? 'active' : 'pending');
+                }
+                stepsHTML += `<div class="ht-line ${lineCls}"></div>`;
+            }
+        });
+
+        return `
+            <div class="home-tracker">
+                <div class="home-tracker-header">
+                    <div class="home-tracker-info">
+                        <span class="home-tracker-title"><i class="fas fa-receipt" style="color:var(--accent);margin-right:6px;"></i>Tu Pedido</span>
+                        <span class="home-tracker-order">${order.number || ''}</span>
+                    </div>
+                    <span class="home-tracker-time">${timeText}</span>
+                </div>
+                <div class="ht-steps">
+                    ${stepsHTML}
+                </div>
+                <div class="ht-message">
+                    <i class="fas fa-info-circle"></i> ${currentMsg}
+                </div>
+                <div class="ht-items-summary">${itemsSummary}</div>
+            </div>
+        `;
+    }
+
     function renderAllProducts() {
         const cats = ['bowls', 'smoothies', 'jugos', 'shots', 'cafe', 'bebidas'];
         let html = '';
 
-        // "Volver a comprar" section for returning customers
-        if (currentUser && currentUser.phone && customerOrderHistory.length > 0) {
+        // Active order tracker OR "Volver a comprar"
+        if (currentUser && currentUser.phone && customerActiveOrders.length > 0) {
+            // Show animated order tracker for most recent active order
+            html += renderHomeOrderTracker(customerActiveOrders[0]);
+        } else if (currentUser && currentUser.phone && customerOrderHistory.length > 0) {
+            // No active orders → show reorder section
             const reorderItems = getReorderProducts();
             if (reorderItems.length > 0) {
                 html += `
@@ -1371,6 +1567,17 @@ document.addEventListener('DOMContentLoaded', function() {
         showPaymentModal();
     }
 
+    // High demand banner helper (injected into payment modal)
+    function getHighDemandBanner() {
+        if (storeStatusOverride === 'alta_demanda') {
+            return `<div class="high-demand-banner">
+                <i class="fas fa-fire"></i>
+                <span>Estamos en <strong>alta demanda</strong>. Tu pedido podría tardar un poco más de lo normal.</span>
+            </div>`;
+        }
+        return '';
+    }
+
     function showPaymentModal() {
         // Reset tip
         currentTip = 0;
@@ -1422,7 +1629,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updatePaymentTotals();
 
         const detailContainer = $('payment-order-detail');
-        detailContainer.innerHTML = cart.map(item => `
+        detailContainer.innerHTML = getHighDemandBanner() + cart.map(item => `
             <div class="pay-item" data-id="${item.id}">
                 <div class="pay-item-header">
                     <div class="pay-item-info">
@@ -2245,7 +2452,12 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const canCancel = (status) => !['entregado', 'cancelado'].includes(status);
+        const canCancel = (status) => !['entregado', 'cancelado', 'en_camino'].includes(status);
+
+        const adminStatusLabels = {
+            pendiente: 'Pendiente', preparando: 'Preparando', listo: 'Listo',
+            en_camino: 'En Camino', entregado: 'Entregado', cancelado: 'Cancelado'
+        };
 
         container.innerHTML = filtered.map(order => {
             const items = order.items || [];
@@ -2255,7 +2467,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="order-card ${isNew ? 'order-new' : ''}">
                 <div class="order-header">
                     <div><strong>${order.number || order.id}</strong><span class="order-date">${dateStr}</span></div>
-                    <span class="order-status status-${order.status}">${order.status}</span>
+                    <span class="order-status status-${order.status}">${adminStatusLabels[order.status] || order.status}</span>
                 </div>
                 <div class="order-items-list">
                     ${items.map(item => `<div class="order-item-line"><span>${item.emoji || ''} ${item.name} x${item.quantity} (${item.size || ''})</span><span>$${(item.total || 0).toFixed(2)}</span></div>`).join('')}
@@ -2269,7 +2481,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="order-actions">
                     ${order.status === 'pendiente' ? `<button class="order-action-btn btn-preparando" data-order-id="${order.id}">Preparando</button>` : ''}
                     ${order.status === 'preparando' ? `<button class="order-action-btn btn-listo" data-order-id="${order.id}">Listo</button>` : ''}
-                    ${order.status === 'listo' ? `<button class="order-action-btn btn-entregado" data-order-id="${order.id}">Entregado</button>` : ''}
+                    ${order.status === 'listo' ? `<button class="order-action-btn btn-encamino" data-order-id="${order.id}">En Camino</button>` : ''}
+                    ${order.status === 'en_camino' ? `<button class="order-action-btn btn-entregado" data-order-id="${order.id}">Entregado</button>` : ''}
                     ${canCancel(order.status) ? `<button class="order-action-btn btn-cancelar" data-cancel-id="${order.id}">Cancelar</button>` : ''}
                 </div>
                 <div class="cancel-form hidden" id="cancel-form-${order.id}">
@@ -2286,6 +2499,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 let newStatus = '';
                 if (btn.classList.contains('btn-preparando')) newStatus = 'preparando';
                 else if (btn.classList.contains('btn-listo')) newStatus = 'listo';
+                else if (btn.classList.contains('btn-encamino')) newStatus = 'en_camino';
                 else if (btn.classList.contains('btn-entregado')) newStatus = 'entregado';
                 if (newStatus && orderId) {
                     db.collection('orders').doc(orderId).update({ status: newStatus })
@@ -4136,6 +4350,115 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast(message, 'warning');
         }, 2500);
     }
+
+    // ========================================
+    // RATING SYSTEM
+    // ========================================
+
+    function showRatingModal(order) {
+        const overlay = $('rating-overlay');
+        const orderRef = $('rating-order-ref');
+        const starsContainer = $('rating-stars');
+        const commentField = $('rating-comment');
+        const submitBtn = $('btn-rating-submit');
+
+        if (!overlay) return;
+
+        currentRatingOrderId = order.id;
+        selectedRating = 0;
+        orderRef.textContent = order.number || '';
+        commentField.value = '';
+        submitBtn.disabled = true;
+
+        // Reset stars
+        starsContainer.querySelectorAll('i').forEach(s => {
+            s.classList.remove('active', 'hovered');
+        });
+
+        overlay.classList.remove('hidden');
+    }
+
+    function closeRatingModal() {
+        const overlay = $('rating-overlay');
+        if (overlay) overlay.classList.add('hidden');
+        currentRatingOrderId = null;
+        selectedRating = 0;
+    }
+
+    async function submitRating() {
+        if (!selectedRating || !currentRatingOrderId) return;
+        const commentField = $('rating-comment');
+        const comment = commentField ? commentField.value.trim() : '';
+
+        try {
+            await db.collection('orders').doc(currentRatingOrderId).update({
+                rating: selectedRating,
+                ratingComment: comment,
+                ratedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            showToast('¡Gracias por tu calificación!', 'success');
+            closeRatingModal();
+        } catch (err) {
+            console.error('Error submitting rating:', err);
+            showToast('Error al enviar calificación', 'warning');
+        }
+    }
+
+    // Rating stars interaction (event delegation)
+    document.addEventListener('mouseover', (e) => {
+        const star = e.target.closest('#rating-stars i[data-star]');
+        if (!star) return;
+        const val = parseInt(star.dataset.star);
+        const container = star.parentElement;
+        container.querySelectorAll('i').forEach(s => {
+            const sv = parseInt(s.dataset.star);
+            s.classList.toggle('hovered', sv <= val && sv > selectedRating);
+        });
+    });
+
+    document.addEventListener('mouseout', (e) => {
+        const star = e.target.closest('#rating-stars i[data-star]');
+        if (!star) return;
+        star.parentElement.querySelectorAll('i').forEach(s => s.classList.remove('hovered'));
+    });
+
+    document.addEventListener('click', (e) => {
+        // Star click
+        const star = e.target.closest('#rating-stars i[data-star]');
+        if (star) {
+            selectedRating = parseInt(star.dataset.star);
+            const container = star.parentElement;
+            container.querySelectorAll('i').forEach(s => {
+                s.classList.toggle('active', parseInt(s.dataset.star) <= selectedRating);
+                s.classList.remove('hovered');
+            });
+            const submitBtn = $('btn-rating-submit');
+            if (submitBtn) submitBtn.disabled = false;
+            return;
+        }
+
+        // Submit rating
+        if (e.target.closest('#btn-rating-submit')) {
+            submitRating();
+            return;
+        }
+
+        // Skip rating
+        if (e.target.closest('#btn-rating-skip')) {
+            if (currentRatingOrderId) ratingDismissed.add(currentRatingOrderId);
+            closeRatingModal();
+            return;
+        }
+
+        // Rate button in Mis Pedidos
+        const rateBtn = e.target.closest('[data-rate-order]');
+        if (rateBtn) {
+            const orderId = rateBtn.dataset.rateOrder;
+            const orderNum = rateBtn.dataset.rateNumber;
+            showRatingModal({ id: orderId, number: orderNum });
+            return;
+        }
+    });
 
     // ========================================
     // COMPORTAMIENTO — Analytics Dashboard
