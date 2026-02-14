@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
-    <link rel="stylesheet" href="styles.css?v=20260213i">
+    <link rel="stylesheet" href="styles.css?v=20260213j">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -240,6 +240,10 @@
                 <button class="admin-nav-btn" data-section="dashboard">
                     <i class="fas fa-chart-line"></i>
                     <span>Dashboard</span>
+                </button>
+                <button class="admin-nav-btn" data-section="asistencia">
+                    <i class="fas fa-fingerprint"></i>
+                    <span>Asistencia</span>
                 </button>
                 <button class="admin-nav-btn" data-section="rrhh">
                     <i class="fas fa-id-badge"></i>
@@ -480,14 +484,13 @@
             <section id="admin-sec-rrhh" class="admin-section hidden">
                 <div class="admin-section-header">
                     <h2><i class="fas fa-id-badge"></i> Recursos Humanos</h2>
-                    <p class="admin-section-subtitle">Gestiona roles, colaboradores y asistencia biométrica</p>
+                    <p class="admin-section-subtitle">Gestiona roles, colaboradores y reportes</p>
                 </div>
 
                 <!-- RRHH Internal Tabs -->
                 <div class="rrhh-tabs">
                     <button class="rrhh-tab-btn active" data-rrhh-tab="roles"><i class="fas fa-user-shield"></i> Roles</button>
                     <button class="rrhh-tab-btn" data-rrhh-tab="colaboradores"><i class="fas fa-users"></i> Colaboradores</button>
-                    <button class="rrhh-tab-btn" data-rrhh-tab="asistencia"><i class="fas fa-fingerprint"></i> Asistencia</button>
                     <button class="rrhh-tab-btn" data-rrhh-tab="reportes"><i class="fas fa-chart-bar"></i> Reportes</button>
                 </div>
 
@@ -546,34 +549,6 @@
                     <div id="rrhh-collabs-list" class="rrhh-collab-grid"></div>
                 </div>
 
-                <!-- TAB: Asistencia -->
-                <div id="rrhh-tab-asistencia" class="rrhh-tab-content hidden">
-                    <div class="rrhh-attendance-layout">
-                        <div class="rrhh-attendance-panel">
-                            <div class="rrhh-clock-display">
-                                <div class="rrhh-clock-time" id="rrhh-clock-time">00:00:00</div>
-                                <div class="rrhh-clock-date" id="rrhh-clock-date">--</div>
-                            </div>
-                            <div class="rrhh-attendance-form">
-                                <h3>Registrar Asistencia</h3>
-                                <div class="rrhh-field">
-                                    <label>Colaborador</label>
-                                    <select id="rrhh-att-collaborator"><option value="">Seleccionar colaborador...</option></select>
-                                </div>
-                                <div class="rrhh-att-type-btns">
-                                    <button class="rrhh-att-type-btn active" data-att-type="entrada"><i class="fas fa-sign-in-alt"></i> Entrada</button>
-                                    <button class="rrhh-att-type-btn" data-att-type="salida"><i class="fas fa-sign-out-alt"></i> Salida</button>
-                                </div>
-                                <button class="rrhh-scan-btn" id="rrhh-att-scan-btn" disabled><i class="fas fa-camera"></i> Escanear Biometría</button>
-                            </div>
-                        </div>
-                        <div class="rrhh-attendance-log">
-                            <h3><i class="fas fa-clipboard-list"></i> Registro de Hoy</h3>
-                            <div id="rrhh-today-log"><p class="rrhh-empty">No hay registros para hoy</p></div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- TAB: Reportes -->
                 <div id="rrhh-tab-reportes" class="rrhh-tab-content hidden">
                     <div class="rrhh-report-controls">
@@ -601,7 +576,51 @@
                 </div>
             </section>
 
+            <!-- ASISTENCIA Standalone Section -->
+            <section id="admin-sec-asistencia" class="admin-section hidden">
+                <div class="att-standalone-container">
+                    <div class="att-clock-display">
+                        <div class="att-clock-time" id="att-clock-time">00:00:00</div>
+                        <div class="att-clock-date" id="att-clock-date">--</div>
+                    </div>
+                    <div class="att-type-selection">
+                        <h2><i class="fas fa-fingerprint"></i> Registrar Asistencia</h2>
+                        <p class="att-instruction">Selecciona el tipo de registro y escanea tu rostro</p>
+                        <div class="att-type-btns">
+                            <button class="att-type-btn active" data-att-type="entrada"><i class="fas fa-sign-in-alt"></i> Entrada</button>
+                            <button class="att-type-btn" data-att-type="salida"><i class="fas fa-sign-out-alt"></i> Salida</button>
+                        </div>
+                        <button class="att-start-scan-btn" id="att-start-scan-btn"><i class="fas fa-camera"></i> Iniciar Escaneo Facial</button>
+                    </div>
+                </div>
+            </section>
+
         </main>
+    </div>
+
+    <!-- Attendance Auto-Scan Overlay -->
+    <div class="att-scan-overlay hidden" id="att-scan-overlay">
+        <div class="att-scan-container">
+            <button class="att-scan-close" id="att-scan-close"><i class="fas fa-times"></i></button>
+            <div class="att-scan-viewport">
+                <video id="att-scan-video" autoplay playsinline></video>
+                <canvas id="att-scan-canvas" style="display:none"></canvas>
+                <div class="att-face-guide"><div class="att-face-corners"></div></div>
+                <div class="att-scan-line hidden" id="att-scan-line"></div>
+                <div class="att-scan-pulse hidden" id="att-scan-pulse"></div>
+                <div class="att-scan-status" id="att-scan-status">
+                    <span id="att-scan-status-text">Posiciona tu rostro en el centro</span>
+                </div>
+                <div class="att-scan-result hidden" id="att-scan-result">
+                    <i class="fas fa-check-circle" id="att-scan-result-icon"></i>
+                    <span id="att-scan-result-text">Identificado</span>
+                </div>
+            </div>
+            <div class="att-scan-info">
+                <div class="att-scan-clock" id="att-scan-clock">--:--:--</div>
+                <div class="att-scan-type entrada" id="att-scan-type"><i class="fas fa-sign-in-alt"></i> Entrada</div>
+            </div>
+        </div>
     </div>
 
     <!-- ORDER CONFIRMATION -->
@@ -798,8 +817,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260213i"></script>
+    <script src="data.js?v=20260213j"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260213i"></script>
+    <script src="app.js?v=20260213j"></script>
 </body>
 </html>

@@ -4428,11 +4428,75 @@ body {
 
 /* RRHH Responsive */
 @media (max-width: 900px) {
-    .rrhh-attendance-layout { grid-template-columns: 1fr; }
     .rrhh-stats-grid { grid-template-columns: repeat(2, 1fr); }
-    .rrhh-clock-time { font-size: 36px; }
     .rrhh-form-grid { grid-template-columns: 1fr; }
     .rrhh-collab-grid, .rrhh-roles-grid { grid-template-columns: 1fr; }
+}
+
+/* ========================================
+   ASISTENCIA STANDALONE
+   ======================================== */
+.att-standalone-container { max-width: 500px; margin: 0 auto; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; min-height: calc(100vh - 120px); justify-content: center; }
+.att-clock-display { text-align: center; padding: 30px; margin-bottom: 30px; background: rgba(123, 45, 142, 0.08); border-radius: var(--radius-sm); border: 1px solid rgba(123, 45, 142, 0.2); width: 100%; }
+.att-clock-time { font-size: 64px; font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: 3px; font-variant-numeric: tabular-nums; }
+.att-clock-date { font-size: 15px; color: var(--text-light); margin-top: 6px; }
+.att-type-selection { text-align: center; width: 100%; }
+.att-type-selection h2 { font-size: 22px; font-weight: 700; color: var(--text-white); margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.att-type-selection h2 i { color: var(--accent); }
+.att-instruction { font-size: 14px; color: var(--text-light); margin-bottom: 20px; }
+.att-type-btns { display: flex; gap: 12px; margin-bottom: 24px; }
+.att-type-btn { flex: 1; padding: 18px; border: 2px solid var(--border); background: var(--bg-surface); color: var(--text-light); border-radius: var(--radius-sm); font-family: 'Poppins', sans-serif; font-size: 18px; font-weight: 700; cursor: pointer; transition: var(--transition); display: flex; align-items: center; justify-content: center; gap: 10px; }
+.att-type-btn.active[data-att-type="entrada"] { background: rgba(92, 184, 92, 0.15); border-color: #5cb85c; color: #5cb85c; }
+.att-type-btn.active[data-att-type="salida"] { background: rgba(255, 71, 87, 0.15); border-color: #ff4757; color: #ff4757; }
+.att-start-scan-btn { width: 100%; padding: 20px; background: var(--gradient-primary); color: white; border: none; border-radius: var(--radius-sm); font-family: 'Poppins', sans-serif; font-size: 18px; font-weight: 700; cursor: pointer; transition: var(--transition); display: flex; align-items: center; justify-content: center; gap: 12px; }
+.att-start-scan-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 30px rgba(233, 30, 140, 0.5); }
+
+/* Scan Overlay */
+.att-scan-overlay { position: fixed; inset: 0; background: #000; z-index: 250; display: flex; align-items: center; justify-content: center; }
+.att-scan-overlay.hidden { display: none; }
+.att-scan-container { width: 100%; max-width: 500px; position: relative; padding: 0 16px; }
+.att-scan-close { position: absolute; top: 8px; right: 24px; z-index: 20; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255,255,255,0.2); color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: var(--transition); }
+.att-scan-close:hover { background: rgba(255,71,87,0.4); border-color: #ff4757; }
+.att-scan-viewport { position: relative; width: 100%; aspect-ratio: 3/4; border-radius: 16px; overflow: hidden; background: #111; }
+.att-scan-viewport video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+
+/* Sci-fi Face Guide — 4 corners */
+.att-face-guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 200px; height: 260px; pointer-events: none; }
+.att-face-corners::before, .att-face-corners::after, .att-face-guide::before, .att-face-guide::after { content: ''; position: absolute; width: 30px; height: 30px; }
+.att-face-corners::before { top: 0; left: 0; border-top: 3px solid #00e096; border-left: 3px solid #00e096; border-top-left-radius: 8px; }
+.att-face-corners::after { top: 0; right: 0; border-top: 3px solid #00e096; border-right: 3px solid #00e096; border-top-right-radius: 8px; }
+.att-face-guide::before { bottom: 0; left: 0; border-bottom: 3px solid #00e096; border-left: 3px solid #00e096; border-bottom-left-radius: 8px; }
+.att-face-guide::after { bottom: 0; right: 0; border-bottom: 3px solid #00e096; border-right: 3px solid #00e096; border-bottom-right-radius: 8px; }
+
+/* Scan Animations */
+.att-scan-line { position: absolute; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, transparent, #00e096, #00ff88, #00e096, transparent); box-shadow: 0 0 20px rgba(0, 224, 150, 0.8), 0 0 60px rgba(0, 224, 150, 0.3); z-index: 5; animation: attScanDown 2.5s ease-in-out; }
+.att-scan-line.hidden { display: none; }
+@keyframes attScanDown { 0% { top: 15%; } 50% { top: 85%; } 100% { top: 15%; } }
+.att-scan-pulse { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 220px; height: 280px; border: 2px solid rgba(0, 224, 150, 0.5); border-radius: 50%; z-index: 4; animation: attPulseRing 1.5s ease-in-out infinite; }
+.att-scan-pulse.hidden { display: none; }
+@keyframes attPulseRing { 0% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; } 50% { transform: translate(-50%, -50%) scale(1.08); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.4; } }
+
+/* Scan Status & Result */
+.att-scan-status { position: absolute; bottom: 20px; left: 0; right: 0; text-align: center; z-index: 10; }
+.att-scan-status span { background: rgba(0, 0, 0, 0.65); padding: 8px 20px; border-radius: 20px; font-size: 14px; font-weight: 600; color: white; font-family: 'Poppins', sans-serif; }
+.att-scan-result { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; z-index: 15; animation: fadeIn 0.3s ease; }
+.att-scan-result.hidden { display: none; }
+.att-scan-result i.fa-check-circle { font-size: 64px; color: #00e096; filter: drop-shadow(0 0 20px rgba(0, 224, 150, 0.6)); }
+.att-scan-result i.fa-times-circle { font-size: 64px; color: #ff4757; filter: drop-shadow(0 0 20px rgba(255, 71, 87, 0.6)); }
+.att-scan-result span { font-size: 18px; font-weight: 700; color: white; font-family: 'Poppins', sans-serif; }
+
+/* Scan Info Bar */
+.att-scan-info { display: flex; justify-content: space-between; align-items: center; padding: 16px 4px; }
+.att-scan-clock { font-size: 24px; font-weight: 700; color: white; font-variant-numeric: tabular-nums; font-family: 'Poppins', sans-serif; }
+.att-scan-type { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; font-family: 'Poppins', sans-serif; }
+.att-scan-type.entrada { color: #5cb85c; }
+.att-scan-type.salida { color: #ff4757; }
+
+/* Asistencia Responsive */
+@media (max-width: 768px) {
+    .att-clock-time { font-size: 48px; }
+    .att-type-btn { font-size: 16px; padding: 14px; }
+    .att-start-scan-btn { font-size: 16px; padding: 16px; }
 }
 
 @media (max-width: 768px) {

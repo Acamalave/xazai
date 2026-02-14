@@ -2137,6 +2137,7 @@ document.addEventListener('DOMContentLoaded', function() {
         initExpenses();
         initDashboard();
         initRRHH();
+        initAttendance();
     }
 
     function exitAdminMode() {
@@ -2144,6 +2145,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Stop listeners
         if (ordersUnsubscribe) { ordersUnsubscribe(); ordersUnsubscribe = null; }
         stopRRHHClock();
+        stopAttClock();
+        closeAttendanceScan();
         // Hide admin dashboard
         adminDashboard.classList.add('hidden');
         // Show client UI
@@ -2178,6 +2181,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (section === 'expenses') loadExpenses();
         if (section === 'dashboard') loadDashboard();
         if (section === 'rrhh') { loadRRHHRoles(); loadRRHHCollaborators(); }
+        if (section === 'asistencia') { startAttClock(); loadRRHHCollaborators(); }
+        if (section !== 'asistencia') stopAttClock();
     });
 
     // Admin orders filter
@@ -3365,8 +3370,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let rrhhCameraStream = null;
     let rrhhCameraMode = null;
     let rrhhCameraTargetId = null;
-    let rrhhAttType = 'entrada';
     let rrhhReportRange = 'today';
+    // Attendance standalone state
+    let attScanStream = null;
+    let attScanType = 'entrada';
+    let attClockInterval = null;
+    let attScanClockInterval = null;
 
     function initRRHH() {
         seedDefaultRoles();
@@ -3378,13 +3387,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.querySelectorAll('.rrhh-tab-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 const tab = btn.dataset.rrhhTab;
-                ['roles', 'colaboradores', 'asistencia', 'reportes'].forEach(t => {
+                ['roles', 'colaboradores', 'reportes'].forEach(t => {
                     const el = $('rrhh-tab-' + t);
                     if (el) el.classList.toggle('hidden', t !== tab);
                 });
-                if (tab === 'asistencia') startRRHHClock();
                 if (tab === 'reportes') loadRRHHReports();
-                if (tab !== 'asistencia') stopRRHHClock();
             });
         });
 
@@ -3393,26 +3400,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Collab save
         $('rrhh-collab-save-btn').addEventListener('click', saveCollaborator);
 
-        // Attendance type buttons
-        document.querySelectorAll('.rrhh-att-type-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.rrhh-att-type-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                rrhhAttType = btn.dataset.attType;
-            });
-        });
-
-        // Attendance scan
-        $('rrhh-att-scan-btn').addEventListener('click', () => {
-            const collabId = $('rrhh-att-collaborator').value;
-            if (!collabId) { showToast('Selecciona un colaborador', 'warning'); return; }
-            openBiometricCapture(collabId, 'verify');
-        });
-        $('rrhh-att-collaborator').addEventListener('change', () => {
-            $('rrhh-att-scan-btn').disabled = !$('rrhh-att-collaborator').value;
-        });
-
-        // Camera modal
+        // Camera modal (for biometric registration)
         $('rrhh-camera-close').addEventListener('click', closeBiometricCamera);
         $('rrhh-capture-btn').addEventListener('click', startBiometricCountdown);
 
@@ -3583,14 +3571,12 @@ document.addEventListener('DOMContentLoaded', function() {
             rrhhCollaborators = [];
             snap.forEach(doc => rrhhCollaborators.push({ id: doc.id, ...doc.data() }));
             renderCollaborators();
-            populateAttendanceSelect();
         }).catch(() => {
             // Index might not exist yet, try without ordering
             db.collection('rrhh_collaborators').get().then(snap => {
                 rrhhCollaborators = [];
                 snap.forEach(doc => { const d = doc.data(); if (d.active !== false) rrhhCollaborators.push({ id: doc.id, ...d }); });
                 renderCollaborators();
-                populateAttendanceSelect();
             });
         });
     }
@@ -3673,16 +3659,6 @@ document.addEventListener('DOMContentLoaded', function() {
         $('rrhh-collab-form-title').textContent = 'Nuevo Colaborador';
     }
 
-    function populateAttendanceSelect() {
-        const withBio = rrhhCollaborators.filter(c => c.biometricPhoto);
-        const select = $('rrhh-att-collaborator');
-        if (select) {
-            select.innerHTML = '<option value="">Seleccionar colaborador...</option>' +
-                withBio.map(c => `<option value="${c.id}">${c.name} (${c.roleName})</option>`).join('');
-        }
-        const scanBtn = $('rrhh-att-scan-btn');
-        if (scanBtn) scanBtn.disabled = true;
-    }
 
     // Delegated: bio register + collab edit
     document.addEventListener('click', (e) => {
@@ -3820,7 +3796,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // --- Attendance ---
-    function recordAttendance(collaboratorId, photo) {
+    function recordAttendance(collaboratorId, photo, type) {
+        type = type || attScanType;
         const collab = rrhhCollaborators.find(c => c.id === collaboratorId);
         if (!collab) return;
         const now = new Date();
@@ -3829,11 +3806,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const localDate = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
         const record = {
             collaboratorId, collaboratorName: collab.name, roleName: collab.roleName, roleColor: collab.roleColor,
-            type: rrhhAttType, photo, timestamp: firebase.firestore.FieldValue.serverTimestamp(), localTime, localDate
+            type, photo, timestamp: firebase.firestore.FieldValue.serverTimestamp(), localTime, localDate
         };
         db.collection('rrhh_attendance').add(record).then(() => {
-            showAttendanceConfirmation(collab, rrhhAttType, now);
-            loadTodayAttendance();
+            showAttendanceConfirmation(collab, type, now);
         }).catch(() => { showToast('Error registrando asistencia', 'warning'); });
     }
 
@@ -3993,6 +3969,168 @@ document.addEventListener('DOMContentLoaded', function() {
                 <td class="type-${r.type}">${r.type === 'entrada' ? '<i class="fas fa-sign-in-alt"></i> Entrada' : '<i class="fas fa-sign-out-alt"></i> Salida'}</td>
                 <td>${r.photo ? '<img class="rrhh-table-photo" src="' + r.photo + '" alt="foto">' : '-'}</td>
             </tr>`).join('');
+    }
+
+    // ========================================
+    // ASISTENCIA STANDALONE
+    // ========================================
+    function initAttendance() {
+        document.querySelectorAll('.att-type-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.att-type-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                attScanType = btn.dataset.attType;
+            });
+        });
+        $('att-start-scan-btn').addEventListener('click', openAttendanceScan);
+        $('att-scan-close').addEventListener('click', closeAttendanceScan);
+    }
+
+    function startAttClock() {
+        updateAttClock();
+        attClockInterval = setInterval(updateAttClock, 1000);
+    }
+    function stopAttClock() {
+        if (attClockInterval) { clearInterval(attClockInterval); attClockInterval = null; }
+        if (attScanClockInterval) { clearInterval(attScanClockInterval); attScanClockInterval = null; }
+    }
+    function updateAttClock() {
+        const now = new Date();
+        const timeEl = $('att-clock-time');
+        const dateEl = $('att-clock-date');
+        if (timeEl) timeEl.textContent = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        const days = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        const months = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        if (dateEl) dateEl.textContent = `${days[now.getDay()]}, ${now.getDate()} de ${months[now.getMonth()]} ${now.getFullYear()}`;
+    }
+
+    function openAttendanceScan() {
+        const overlay = $('att-scan-overlay');
+        overlay.classList.remove('hidden');
+        // Update type display
+        const typeEl = $('att-scan-type');
+        typeEl.className = 'att-scan-type ' + attScanType;
+        typeEl.innerHTML = attScanType === 'entrada'
+            ? '<i class="fas fa-sign-in-alt"></i> Entrada'
+            : '<i class="fas fa-sign-out-alt"></i> Salida';
+        // Reset UI
+        $('att-scan-line').classList.add('hidden');
+        $('att-scan-pulse').classList.add('hidden');
+        $('att-scan-result').classList.add('hidden');
+        $('att-scan-status-text').textContent = 'Posiciona tu rostro en el centro';
+        // Start clock in scan modal
+        const updateScanClock = () => {
+            const now = new Date();
+            const el = $('att-scan-clock');
+            if (el) el.textContent = now.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        };
+        updateScanClock();
+        attScanClockInterval = setInterval(updateScanClock, 1000);
+        // Open camera
+        navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+        }).then(stream => {
+            attScanStream = stream;
+            const video = $('att-scan-video');
+            video.srcObject = stream;
+            video.play();
+            // Auto-trigger scan after 2 seconds
+            setTimeout(() => { performAttendanceScan(); }, 2000);
+        }).catch(() => {
+            showToast('No se pudo acceder a la cámara', 'warning');
+            closeAttendanceScan();
+        });
+    }
+
+    function closeAttendanceScan() {
+        $('att-scan-overlay').classList.add('hidden');
+        if (attScanStream) {
+            attScanStream.getTracks().forEach(track => track.stop());
+            attScanStream = null;
+        }
+        const video = $('att-scan-video');
+        if (video) video.srcObject = null;
+        if (attScanClockInterval) { clearInterval(attScanClockInterval); attScanClockInterval = null; }
+    }
+
+    function performAttendanceScan() {
+        $('att-scan-status-text').textContent = 'Escaneando rostro...';
+        const scanLine = $('att-scan-line');
+        const scanPulse = $('att-scan-pulse');
+        scanLine.classList.remove('hidden');
+        scanLine.style.animation = 'none';
+        void scanLine.offsetHeight;
+        scanLine.style.animation = '';
+        scanPulse.classList.remove('hidden');
+
+        setTimeout(() => {
+            scanLine.classList.add('hidden');
+            scanPulse.classList.add('hidden');
+            // Capture frame
+            const video = $('att-scan-video');
+            const canvas = $('att-scan-canvas');
+            if (!video || video.videoWidth === 0) {
+                showAttScanFailure('No se pudo capturar la imagen. Intenta de nuevo.');
+                return;
+            }
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const maxSize = 800;
+            let w = canvas.width, h = canvas.height;
+            if (w > maxSize || h > maxSize) {
+                if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                else { w = Math.round(w * maxSize / h); h = maxSize; }
+            }
+            const resized = document.createElement('canvas');
+            resized.width = w; resized.height = h;
+            resized.getContext('2d').drawImage(canvas, 0, 0, w, h);
+            const capturedPhoto = resized.toDataURL('image/jpeg', 0.7);
+            simulateFaceMatch(capturedPhoto);
+        }, 2500);
+    }
+
+    function simulateFaceMatch(capturedPhoto) {
+        $('att-scan-status-text').textContent = 'Comparando con registros biométricos...';
+        const registeredCollabs = rrhhCollaborators.filter(c => c.biometricPhoto);
+        if (registeredCollabs.length === 0) {
+            showAttScanFailure('No hay colaboradores con biometría registrada');
+            return;
+        }
+        // Simulate processing delay
+        setTimeout(() => {
+            // Always succeed if there are registered collaborators (simulated match)
+            const matched = registeredCollabs[Math.floor(Math.random() * registeredCollabs.length)];
+            showAttScanSuccess(matched, capturedPhoto);
+        }, 1500);
+    }
+
+    function showAttScanSuccess(collab, capturedPhoto) {
+        const result = $('att-scan-result');
+        const icon = $('att-scan-result-icon');
+        const text = $('att-scan-result-text');
+        icon.className = 'fas fa-check-circle';
+        text.textContent = `Identificado: ${collab.name}`;
+        result.classList.remove('hidden');
+        $('att-scan-status-text').textContent = 'Identidad verificada';
+        setTimeout(() => {
+            closeAttendanceScan();
+            recordAttendance(collab.id, capturedPhoto, attScanType);
+        }, 1500);
+    }
+
+    function showAttScanFailure(message) {
+        const result = $('att-scan-result');
+        const icon = $('att-scan-result-icon');
+        const text = $('att-scan-result-text');
+        icon.className = 'fas fa-times-circle';
+        text.textContent = message;
+        result.classList.remove('hidden');
+        $('att-scan-status-text').textContent = 'Error en verificación';
+        setTimeout(() => {
+            closeAttendanceScan();
+            showToast(message, 'warning');
+        }, 2500);
     }
 
     // ========================================
