@@ -1940,19 +1940,57 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!query || query.length < 3) { hideSuggestions(); return; }
 
             const sDiv = createSuggestionsDiv();
+            sDiv.innerHTML = '<div class="map-suggestion-item" style="color:var(--text-light);cursor:default;"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';
+            sDiv.classList.remove('hidden');
 
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Panama')}&limit=5&addressdetails=1`)
-                .then(r => r.json())
-                .then(results => {
-                    if (results.length === 0) {
-                        sDiv.innerHTML = '<div class="map-suggestion-item" style="color:var(--text-light);cursor:default;"><i class="fas fa-info-circle"></i> Sin resultados</div>';
-                        sDiv.classList.remove('hidden');
-                        return;
-                    }
+            // Search with Nominatim bounded to Panama City metro area + Photon fallback
+            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&viewbox=-79.60,9.10,-79.35,8.90&bounded=1&countrycodes=pa`;
+            const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query + ' Panama City')}&limit=5&lat=${STORE_LAT}&lon=${STORE_LNG}&lang=es`;
+
+            // Try both APIs in parallel and merge results
+            Promise.allSettled([
+                fetch(nominatimUrl).then(r => r.json()),
+                fetch(photonUrl).then(r => r.json())
+            ]).then(([nominatimRes, photonRes]) => {
+                let results = [];
+
+                // Parse Nominatim results
+                if (nominatimRes.status === 'fulfilled' && nominatimRes.value.length > 0) {
+                    results = nominatimRes.value.map(r => ({
+                        lat: parseFloat(r.lat),
+                        lng: parseFloat(r.lon),
+                        name: r.display_name
+                    }));
+                }
+
+                // Parse Photon results and add non-duplicates
+                if (photonRes.status === 'fulfilled' && photonRes.value.features) {
+                    photonRes.value.features.forEach(f => {
+                        const plat = f.geometry.coordinates[1];
+                        const plng = f.geometry.coordinates[0];
+                        // Only add if not too far from Panama City and not duplicate
+                        if (Math.abs(plat - STORE_LAT) < 0.3 && Math.abs(plng - STORE_LNG) < 0.3) {
+                            const pname = [f.properties.name, f.properties.street, f.properties.district, f.properties.city].filter(Boolean).join(', ');
+                            const isDuplicate = results.some(r => Math.abs(r.lat - plat) < 0.001 && Math.abs(r.lng - plng) < 0.001);
+                            if (!isDuplicate && pname) {
+                                results.push({ lat: plat, lng: plng, name: pname });
+                            }
+                        }
+                    });
+                }
+
+                // Limit to 6 results
+                results = results.slice(0, 6);
+
+                if (results.length === 0) {
+                    sDiv.innerHTML = '<div class="map-suggestion-item" style="color:var(--text-light);cursor:default;"><i class="fas fa-info-circle"></i> Sin resultados. Intenta buscar por barrio o calle</div>';
+                    sDiv.classList.remove('hidden');
+                    return;
+                }
 
                     sDiv.innerHTML = results.map(r => {
-                        const shortName = r.display_name.length > 80 ? r.display_name.substring(0, 80) + '...' : r.display_name;
-                        return `<div class="map-suggestion-item" data-lat="${r.lat}" data-lng="${r.lon}" data-name="${r.display_name.replace(/"/g, '&quot;')}">
+                        const shortName = r.name.length > 80 ? r.name.substring(0, 80) + '...' : r.name;
+                        return `<div class="map-suggestion-item" data-lat="${r.lat}" data-lng="${r.lng}" data-name="${r.name.replace(/"/g, '&quot;')}">
                             <i class="fas fa-map-marker-alt"></i>
                             <span>${shortName}</span>
                         </div>`;
@@ -1970,8 +2008,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             );
                         });
                     });
-                })
-                .catch(() => hideSuggestions());
+                }).catch(() => hideSuggestions());
         }
 
         if (searchInput) {
