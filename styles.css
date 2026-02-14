@@ -4499,6 +4499,112 @@ body {
     .att-start-scan-btn { font-size: 16px; padding: 16px; }
 }
 
+/* ============================================ */
+/* COMPORTAMIENTO — Analytics Dashboard         */
+/* ============================================ */
+
+/* Date Controls */
+.beh-date-controls { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.beh-range-btn { padding: 8px 18px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text-light); font-size: 13px; font-weight: 500; cursor: pointer; transition: var(--transition); font-family: 'Poppins', sans-serif; }
+.beh-range-btn:hover { border-color: var(--accent); color: var(--accent); }
+.beh-range-btn.active { background: var(--gradient-primary); color: white; border-color: transparent; }
+
+/* KPI Grid */
+.beh-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.beh-kpi-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: flex; align-items: center; gap: 16px; }
+.beh-kpi-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+.beh-kpi-icon.accent { background: rgba(233, 30, 140, 0.15); color: #e91e8c; }
+.beh-kpi-icon.green { background: rgba(92, 184, 92, 0.15); color: #5cb85c; }
+.beh-kpi-icon.blue { background: rgba(91, 192, 222, 0.15); color: #5bc0de; }
+.beh-kpi-icon.red { background: rgba(255, 71, 87, 0.15); color: #ff4757; }
+.beh-kpi-info { display: flex; flex-direction: column; }
+.beh-kpi-value { font-size: 22px; font-weight: 700; color: var(--text-white); }
+.beh-kpi-label { font-size: 11px; text-transform: uppercase; color: var(--text-light); letter-spacing: 0.5px; font-weight: 500; }
+
+/* Panels */
+.beh-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
+.beh-panel h3 { font-size: 14px; font-weight: 600; color: var(--text-white); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.beh-panel h3 i { color: var(--accent); }
+.beh-panel-sub { font-size: 12px; color: var(--text-light); margin: -8px 0 16px 0; }
+.beh-panel-full { margin-bottom: 24px; }
+.beh-grid-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+/* Heatmap */
+.beh-heatmap { display: grid; grid-template-columns: 50px repeat(17, 1fr); gap: 2px; }
+.beh-heat-label { font-size: 10px; color: var(--text-light); display: flex; align-items: center; justify-content: center; font-weight: 500; }
+.beh-heat-label.beh-heat-header { font-size: 9px; }
+.beh-heat-cell { aspect-ratio: 1; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.8); transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: default; position: relative; min-width: 0; }
+.beh-heat-cell:hover { transform: scale(1.35); z-index: 2; box-shadow: 0 0 12px rgba(233, 30, 140, 0.5); }
+.beh-heat-cell[data-count="0"] { background: rgba(255,255,255,0.03) !important; color: transparent; }
+.beh-heatmap-legend { display: flex; align-items: center; gap: 8px; margin-top: 12px; justify-content: center; font-size: 11px; color: var(--text-light); }
+.beh-legend-gradient { width: 120px; height: 10px; border-radius: 5px; background: linear-gradient(to right, rgba(233,30,140,0.08), rgba(233,30,140,1)); }
+
+/* Time Slots (Products by Time) */
+.beh-time-slot { margin-bottom: 16px; }
+.beh-time-slot:last-child { margin-bottom: 0; }
+.beh-time-header { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-white); margin-bottom: 8px; }
+.beh-time-header i { color: var(--accent); font-size: 14px; }
+.beh-time-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; color: var(--text-light); }
+.beh-time-item .beh-item-rank { font-size: 11px; font-weight: 700; color: var(--accent); min-width: 18px; }
+.beh-time-item .beh-item-emoji { font-size: 16px; }
+.beh-time-item .beh-item-name { flex: 1; }
+.beh-time-item .beh-item-count { font-weight: 600; color: var(--text-white); }
+
+/* Payment Bars */
+.beh-pay-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.beh-pay-row:last-child { border-bottom: none; }
+.beh-pay-label { font-size: 13px; color: var(--text-light); min-width: 70px; font-weight: 500; }
+.beh-pay-bar-bg { flex: 1; height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden; }
+.beh-pay-bar-fill { height: 100%; border-radius: 5px; transition: width 0.6s ease; }
+.beh-pay-bar-fill.efectivo { background: #5cb85c; }
+.beh-pay-bar-fill.yappy { background: #5bc0de; }
+.beh-pay-bar-fill.tarjeta { background: #f0ad4e; }
+.beh-pay-value { font-size: 13px; font-weight: 600; color: var(--text-white); min-width: 50px; text-align: right; }
+.beh-pay-pct { font-size: 11px; color: var(--text-light); min-width: 40px; text-align: right; }
+
+/* Device Bars */
+.beh-device-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.beh-device-row:last-child { border-bottom: none; }
+.beh-device-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.beh-device-icon.mobile { background: rgba(91, 192, 222, 0.15); color: #5bc0de; }
+.beh-device-icon.desktop { background: rgba(233, 30, 140, 0.15); color: #e91e8c; }
+.beh-device-icon.tablet { background: rgba(240, 173, 78, 0.15); color: #f0ad4e; }
+.beh-device-info { flex: 1; }
+.beh-device-name { font-size: 13px; font-weight: 600; color: var(--text-white); }
+.beh-device-bar { height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; margin-top: 4px; overflow: hidden; }
+.beh-device-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+.beh-device-pct { font-size: 16px; font-weight: 700; color: var(--text-white); min-width: 45px; text-align: right; }
+.beh-device-note { font-size: 11px; color: var(--text-light); margin-top: 12px; font-style: italic; }
+
+/* Customer Patterns */
+.beh-cust-bar-container { margin-bottom: 16px; }
+.beh-cust-bar-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+.beh-cust-bar-label span:first-child { color: var(--text-light); }
+.beh-cust-bar-label span:last-child { color: var(--text-white); font-weight: 600; }
+.beh-cust-bar { height: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; display: flex; }
+.beh-cust-bar-new { background: #5bc0de; height: 100%; transition: width 0.6s ease; }
+.beh-cust-bar-returning { background: #e91e8c; height: 100%; transition: width 0.6s ease; }
+.beh-cust-legend { display: flex; gap: 16px; margin-bottom: 16px; font-size: 11px; color: var(--text-light); }
+.beh-cust-legend span::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+.beh-cust-legend .beh-leg-new::before { background: #5bc0de; }
+.beh-cust-legend .beh-leg-returning::before { background: #e91e8c; }
+.beh-cust-stat { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.beh-cust-stat:last-child { border-bottom: none; }
+.beh-cust-rank { width: 24px; height: 24px; border-radius: 50%; background: rgba(233, 30, 140, 0.15); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+.beh-cust-name { flex: 1; color: var(--text-light); }
+.beh-cust-count { font-weight: 700; color: var(--text-white); }
+
+/* Empty State */
+.beh-empty { text-align: center; padding: 40px 20px; color: var(--text-light); font-size: 14px; }
+.beh-empty i { font-size: 32px; margin-bottom: 12px; display: block; opacity: 0.3; }
+
+/* Comportamiento Responsive */
+@media (max-width: 900px) {
+    .beh-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .beh-grid-2col { grid-template-columns: 1fr; }
+    .beh-heatmap { overflow-x: auto; min-width: 600px; }
+}
+
 @media (max-width: 768px) {
     .hero h1 { font-size: 28px; }
     .hero { padding: 40px 20px; }

@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
     <title>XAZAI - Açai Bar & Smoothies</title>
-    <link rel="stylesheet" href="styles.css?v=20260214b">
+    <link rel="stylesheet" href="styles.css?v=20260214c">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -244,6 +244,10 @@
                 <button class="admin-nav-btn" data-section="asistencia">
                     <i class="fas fa-fingerprint"></i>
                     <span>Asistencia</span>
+                </button>
+                <button class="admin-nav-btn" data-section="comportamiento">
+                    <i class="fas fa-brain"></i>
+                    <span>Comportamiento</span>
                 </button>
                 <button class="admin-nav-btn" data-section="rrhh">
                     <i class="fas fa-id-badge"></i>
@@ -576,6 +580,46 @@
                 </div>
             </section>
 
+            <!-- COMPORTAMIENTO Section -->
+            <section id="admin-sec-comportamiento" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-brain"></i> Comportamiento del Cliente</h2>
+                    <p class="admin-section-subtitle">Analíticas de tráfico, horarios y patrones de compra</p>
+                </div>
+                <div class="beh-date-controls">
+                    <button class="beh-range-btn active" data-beh-range="week">Semana</button>
+                    <button class="beh-range-btn" data-beh-range="month">Mes</button>
+                    <button class="beh-range-btn" data-beh-range="quarter">Trimestre</button>
+                </div>
+                <div class="beh-kpi-grid" id="beh-kpi-grid"></div>
+                <div class="beh-panel beh-panel-full" id="beh-heatmap-panel">
+                    <h3><i class="fas fa-fire"></i> Mapa de Calor — Horarios de Venta</h3>
+                    <p class="beh-panel-sub">Intensidad de transacciones por día y hora</p>
+                    <div class="beh-heatmap" id="beh-heatmap"></div>
+                    <div class="beh-heatmap-legend">
+                        <span>Menor</span>
+                        <div class="beh-legend-gradient"></div>
+                        <span>Mayor</span>
+                    </div>
+                </div>
+                <div class="beh-grid-2col">
+                    <div class="beh-panel" id="beh-products-by-time">
+                        <h3><i class="fas fa-clock"></i> Productos por Horario</h3>
+                    </div>
+                    <div class="beh-panel" id="beh-payment-trends">
+                        <h3><i class="fas fa-credit-card"></i> Tendencia de Pagos</h3>
+                    </div>
+                </div>
+                <div class="beh-grid-2col">
+                    <div class="beh-panel" id="beh-devices">
+                        <h3><i class="fas fa-mobile-alt"></i> Tráfico por Dispositivo</h3>
+                    </div>
+                    <div class="beh-panel" id="beh-customer-patterns">
+                        <h3><i class="fas fa-users"></i> Patrones de Clientes</h3>
+                    </div>
+                </div>
+            </section>
+
             <!-- ASISTENCIA Standalone Section -->
             <section id="admin-sec-asistencia" class="admin-section hidden">
                 <div class="att-standalone-container">
@@ -817,8 +861,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260214b"></script>
+    <script src="data.js?v=20260214c"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260214b"></script>
+    <script src="app.js?v=20260214c"></script>
 </body>
 </html>

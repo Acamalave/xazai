@@ -1957,6 +1957,7 @@ document.addEventListener('DOMContentLoaded', function() {
             customerPhone: currentUser ? (currentUser.phone || '') : '',
             address: address || '',
             scheduledSlot: cleanSlot,
+            deviceType: detectDeviceType(),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }).then(() => {
             console.log(`Order ${orderId} saved to Firestore`);
@@ -2037,6 +2038,7 @@ document.addEventListener('DOMContentLoaded', function() {
             address: deliveryAddress,
             scheduled: scheduledSlot ? `${scheduledSlot.label} ${scheduledSlot.time}` : null,
             status: 'pendiente',
+            deviceType: detectDeviceType(),
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -2180,6 +2182,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load data for the section
         if (section === 'expenses') loadExpenses();
         if (section === 'dashboard') loadDashboard();
+        if (section === 'comportamiento') loadBehaviorAnalytics();
         if (section === 'rrhh') { loadRRHHRoles(); loadRRHHCollaborators(); }
         if (section === 'asistencia') { startAttClock(); loadRRHHCollaborators(); }
         if (section !== 'asistencia') stopAttClock();
@@ -2797,6 +2800,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tip: posTipAmount,
             total,
             paymentMethod: posPaymentMethod,
+            deviceType: detectDeviceType(),
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             date: new Date().toLocaleDateString('es-PA')
         };
@@ -4131,6 +4135,299 @@ document.addEventListener('DOMContentLoaded', function() {
             closeAttendanceScan();
             showToast(message, 'warning');
         }, 2500);
+    }
+
+    // ========================================
+    // COMPORTAMIENTO — Analytics Dashboard
+    // ========================================
+
+    function detectDeviceType() {
+        const ua = navigator.userAgent;
+        if (/iPad|Android(?!.*Mobile)|tablet/i.test(ua)) return 'tablet';
+        if (/iPhone|Android.*Mobile|webOS|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return 'mobile';
+        return 'desktop';
+    }
+
+    function getBehDateRange(range) {
+        const now = new Date();
+        const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        let start;
+        if (range === 'week') start = new Date(end.getTime() - 7 * 86400000);
+        else if (range === 'month') start = new Date(end.getTime() - 30 * 86400000);
+        else start = new Date(end.getTime() - 90 * 86400000);
+        return {
+            start: firebase.firestore.Timestamp.fromDate(start),
+            end: firebase.firestore.Timestamp.fromDate(end)
+        };
+    }
+
+    function loadBehaviorAnalytics() {
+        const activeBtn = document.querySelector('.beh-range-btn.active');
+        const range = activeBtn ? activeBtn.dataset.behRange : 'week';
+        const { start, end } = getBehDateRange(range);
+
+        Promise.all([
+            db.collection('sales').where('createdAt', '>=', start).where('createdAt', '<', end).get(),
+            db.collection('orders').where('createdAt', '>=', start).where('createdAt', '<', end).get()
+        ]).then(([salesSnap, ordersSnap]) => {
+            const transactions = [];
+            salesSnap.forEach(doc => {
+                const d = doc.data();
+                if (!d.createdAt) return;
+                const date = new Date(d.createdAt.seconds * 1000);
+                transactions.push({
+                    timestamp: date,
+                    hour: date.getHours(),
+                    dayOfWeek: date.getDay(),
+                    items: (d.items || []).map(it => ({ name: it.name, emoji: it.emoji || '', qty: it.qty || it.quantity || 1 })),
+                    total: d.total || 0,
+                    paymentMethod: d.paymentMethod || 'efectivo',
+                    deviceType: d.deviceType || null,
+                    customerPhone: null,
+                    customerName: null,
+                    status: 'completed',
+                    type: 'sale'
+                });
+            });
+            ordersSnap.forEach(doc => {
+                const d = doc.data();
+                if (!d.createdAt) return;
+                const date = new Date(d.createdAt.seconds * 1000);
+                transactions.push({
+                    timestamp: date,
+                    hour: date.getHours(),
+                    dayOfWeek: date.getDay(),
+                    items: (d.items || []).map(it => ({ name: it.name, emoji: it.emoji || '', qty: it.quantity || it.qty || 1 })),
+                    total: d.total || 0,
+                    paymentMethod: d.paymentMethod || 'yappy',
+                    deviceType: d.deviceType || null,
+                    customerPhone: d.customerPhone || null,
+                    customerName: d.customerName || null,
+                    status: d.status || 'pendiente',
+                    type: 'order'
+                });
+            });
+            renderBehKPIs(transactions);
+            renderBehHeatmap(transactions);
+            renderBehProductsByTime(transactions);
+            renderBehPaymentTrends(transactions);
+            renderBehDevices(transactions);
+            renderBehCustomerPatterns(transactions);
+        }).catch(err => {
+            console.error('Error loading behavior analytics:', err);
+        });
+    }
+
+    // Event listeners for date range buttons
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.beh-range-btn');
+        if (!btn) return;
+        document.querySelectorAll('.beh-range-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadBehaviorAnalytics();
+    });
+
+    function renderBehKPIs(transactions) {
+        const container = $('beh-kpi-grid');
+        if (!container) return;
+        const totalTx = transactions.length;
+        const totalRevenue = transactions.reduce((s, t) => s + t.total, 0);
+        const avgTicket = totalTx > 0 ? totalRevenue / totalTx : 0;
+        const orders = transactions.filter(t => t.type === 'order');
+        const completed = orders.filter(t => t.status === 'entregado' || t.status === 'listo');
+        const completionRate = orders.length > 0 ? (completed.length / orders.length * 100) : 100;
+        // Peak hour
+        const hourCounts = {};
+        transactions.forEach(t => { hourCounts[t.hour] = (hourCounts[t.hour] || 0) + 1; });
+        let peakHour = '--';
+        let peakCount = 0;
+        Object.entries(hourCounts).forEach(([h, c]) => { if (c > peakCount) { peakCount = c; peakHour = h; } });
+        const peakLabel = peakHour !== '--' ? `${peakHour}:00` : '--';
+
+        container.innerHTML = `
+            <div class="beh-kpi-card">
+                <div class="beh-kpi-icon accent"><i class="fas fa-receipt"></i></div>
+                <div class="beh-kpi-info"><span class="beh-kpi-value">${totalTx}</span><span class="beh-kpi-label">Total Transacciones</span></div>
+            </div>
+            <div class="beh-kpi-card">
+                <div class="beh-kpi-icon green"><i class="fas fa-dollar-sign"></i></div>
+                <div class="beh-kpi-info"><span class="beh-kpi-value">$${avgTicket.toFixed(2)}</span><span class="beh-kpi-label">Ticket Promedio</span></div>
+            </div>
+            <div class="beh-kpi-card">
+                <div class="beh-kpi-icon blue"><i class="fas fa-check-circle"></i></div>
+                <div class="beh-kpi-info"><span class="beh-kpi-value">${completionRate.toFixed(0)}%</span><span class="beh-kpi-label">Tasa Completado</span></div>
+            </div>
+            <div class="beh-kpi-card">
+                <div class="beh-kpi-icon red"><i class="fas fa-fire"></i></div>
+                <div class="beh-kpi-info"><span class="beh-kpi-value">${peakLabel}</span><span class="beh-kpi-label">Hora Pico</span></div>
+            </div>`;
+    }
+
+    function renderBehHeatmap(transactions) {
+        const container = $('beh-heatmap');
+        if (!container) return;
+        const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const startHour = 7, endHour = 23;
+        const cols = endHour - startHour + 1;
+        // Build matrix [dayOfWeek 0-6][hour 7-23]
+        const matrix = Array.from({ length: 7 }, () => Array(cols).fill(0));
+        let maxCount = 0;
+        transactions.forEach(t => {
+            const h = t.hour;
+            if (h >= startHour && h <= endHour) {
+                matrix[t.dayOfWeek][h - startHour]++;
+                if (matrix[t.dayOfWeek][h - startHour] > maxCount) maxCount = matrix[t.dayOfWeek][h - startHour];
+            }
+        });
+        // Render grid: reorder to start from Lun (1) to Dom (0)
+        const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+        let html = '<div class="beh-heat-label"></div>';
+        for (let h = startHour; h <= endHour; h++) {
+            html += `<div class="beh-heat-label beh-heat-header">${h}</div>`;
+        }
+        dayOrder.forEach(day => {
+            html += `<div class="beh-heat-label">${dayNames[day]}</div>`;
+            for (let hi = 0; hi < cols; hi++) {
+                const count = matrix[day][hi];
+                const intensity = maxCount > 0 ? count / maxCount : 0;
+                html += `<div class="beh-heat-cell" data-count="${count}" style="background: rgba(233,30,140,${intensity * 0.85 + (count > 0 ? 0.1 : 0)})" title="${count} ventas — ${dayNames[day]} ${startHour + hi}:00">${count || ''}</div>`;
+            }
+        });
+        container.style.gridTemplateColumns = `50px repeat(${cols}, 1fr)`;
+        container.innerHTML = html;
+    }
+
+    function renderBehProductsByTime(transactions) {
+        const container = $('beh-products-by-time');
+        if (!container) return;
+        const slots = [
+            { label: 'Mañana', icon: 'fa-sun', range: [7, 12] },
+            { label: 'Tarde', icon: 'fa-cloud-sun', range: [12, 17] },
+            { label: 'Noche', icon: 'fa-moon', range: [17, 24] }
+        ];
+        let html = '<h3><i class="fas fa-clock"></i> Productos por Horario</h3>';
+        slots.forEach(slot => {
+            const slotTx = transactions.filter(t => t.hour >= slot.range[0] && t.hour < slot.range[1]);
+            const itemCounts = {};
+            slotTx.forEach(t => {
+                t.items.forEach(it => {
+                    const key = it.name;
+                    if (!itemCounts[key]) itemCounts[key] = { name: it.name, emoji: it.emoji, count: 0 };
+                    itemCounts[key].count += it.qty;
+                });
+            });
+            const sorted = Object.values(itemCounts).sort((a, b) => b.count - a.count).slice(0, 3);
+            html += `<div class="beh-time-slot">
+                <div class="beh-time-header"><i class="fas ${slot.icon}"></i> ${slot.label} (${slot.range[0]}:00 - ${slot.range[1] === 24 ? '00' : slot.range[1]}:00)</div>`;
+            if (sorted.length === 0) {
+                html += '<div class="beh-time-item" style="color:var(--text-light);font-style:italic">Sin datos</div>';
+            } else {
+                sorted.forEach((item, i) => {
+                    html += `<div class="beh-time-item"><span class="beh-item-rank">${i + 1}</span><span class="beh-item-emoji">${item.emoji}</span><span class="beh-item-name">${item.name}</span><span class="beh-item-count">${item.count}</span></div>`;
+                });
+            }
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+    function renderBehPaymentTrends(transactions) {
+        const container = $('beh-payment-trends');
+        if (!container) return;
+        const methods = { efectivo: 0, yappy: 0, tarjeta: 0 };
+        transactions.forEach(t => {
+            const m = (t.paymentMethod || 'efectivo').toLowerCase();
+            if (methods.hasOwnProperty(m)) methods[m]++;
+            else methods.efectivo++;
+        });
+        const total = transactions.length || 1;
+        const labels = { efectivo: 'Efectivo', yappy: 'Yappy', tarjeta: 'Tarjeta' };
+        let html = '<h3><i class="fas fa-credit-card"></i> Tendencia de Pagos</h3>';
+        Object.entries(methods).forEach(([key, count]) => {
+            const pct = (count / total * 100).toFixed(0);
+            html += `<div class="beh-pay-row">
+                <span class="beh-pay-label">${labels[key]}</span>
+                <div class="beh-pay-bar-bg"><div class="beh-pay-bar-fill ${key}" style="width:${pct}%"></div></div>
+                <span class="beh-pay-value">${count}</span>
+                <span class="beh-pay-pct">${pct}%</span>
+            </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function renderBehDevices(transactions) {
+        const container = $('beh-devices');
+        if (!container) return;
+        const withDevice = transactions.filter(t => t.deviceType);
+        const counts = { mobile: 0, desktop: 0, tablet: 0 };
+        const icons = { mobile: 'fa-mobile-alt', desktop: 'fa-desktop', tablet: 'fa-tablet-alt' };
+        const labels = { mobile: 'Móvil', desktop: 'Escritorio', tablet: 'Tablet' };
+        const colors = { mobile: '#5bc0de', desktop: '#e91e8c', tablet: '#f0ad4e' };
+        withDevice.forEach(t => { if (counts.hasOwnProperty(t.deviceType)) counts[t.deviceType]++; });
+        const total = withDevice.length || 1;
+        const currentDevice = detectDeviceType();
+
+        let html = '<h3><i class="fas fa-mobile-alt"></i> Tráfico por Dispositivo</h3>';
+        if (withDevice.length === 0) {
+            html += `<div class="beh-empty"><i class="fas fa-chart-pie"></i>Recopilando datos de dispositivos...<br><small>Los nuevos pedidos registrarán esta información</small></div>
+                <div class="beh-device-row">
+                    <div class="beh-device-icon ${currentDevice}"><i class="fas ${icons[currentDevice]}"></i></div>
+                    <div class="beh-device-info"><div class="beh-device-name">Tu dispositivo actual</div><div style="font-size:12px;color:var(--text-light)">${labels[currentDevice]}</div></div>
+                </div>`;
+        } else {
+            Object.entries(counts).sort((a, b) => b[1] - a[1]).forEach(([key, count]) => {
+                const pct = (count / total * 100).toFixed(0);
+                html += `<div class="beh-device-row">
+                    <div class="beh-device-icon ${key}"><i class="fas ${icons[key]}"></i></div>
+                    <div class="beh-device-info">
+                        <div class="beh-device-name">${labels[key]}</div>
+                        <div class="beh-device-bar"><div class="beh-device-bar-fill" style="width:${pct}%;background:${colors[key]}"></div></div>
+                    </div>
+                    <span class="beh-device-pct">${pct}%</span>
+                </div>`;
+            });
+            html += `<div class="beh-device-note">${withDevice.length} transacciones con datos de dispositivo</div>`;
+        }
+        container.innerHTML = html;
+    }
+
+    function renderBehCustomerPatterns(transactions) {
+        const container = $('beh-customer-patterns');
+        if (!container) return;
+        const orders = transactions.filter(t => t.type === 'order' && t.customerPhone);
+        const customerMap = {};
+        orders.forEach(t => {
+            const phone = t.customerPhone;
+            if (!customerMap[phone]) customerMap[phone] = { name: t.customerName || 'Cliente', count: 0 };
+            customerMap[phone].count++;
+        });
+        const customers = Object.values(customerMap);
+        const newCustomers = customers.filter(c => c.count === 1).length;
+        const returningCustomers = customers.filter(c => c.count > 1).length;
+        const totalCustomers = customers.length || 1;
+        const avgFreq = orders.length > 0 && customers.length > 0 ? (orders.length / customers.length).toFixed(1) : '0';
+        const top5 = customers.sort((a, b) => b.count - a.count).slice(0, 5);
+
+        let html = '<h3><i class="fas fa-users"></i> Patrones de Clientes</h3>';
+        if (orders.length === 0) {
+            html += '<div class="beh-empty"><i class="fas fa-user-friends"></i>Sin datos de clientes en este período</div>';
+        } else {
+            const newPct = (newCustomers / totalCustomers * 100).toFixed(0);
+            const retPct = (returningCustomers / totalCustomers * 100).toFixed(0);
+            html += `<div class="beh-cust-bar-container">
+                <div class="beh-cust-bar-label"><span>Distribución de clientes</span><span>${customers.length} únicos</span></div>
+                <div class="beh-cust-bar"><div class="beh-cust-bar-new" style="width:${newPct}%"></div><div class="beh-cust-bar-returning" style="width:${retPct}%"></div></div>
+            </div>
+            <div class="beh-cust-legend"><span class="beh-leg-new">Nuevos (${newCustomers})</span><span class="beh-leg-returning">Recurrentes (${returningCustomers})</span></div>
+            <div style="font-size:12px;color:var(--text-light);margin-bottom:12px">Frecuencia promedio: <strong style="color:var(--text-white)">${avgFreq} pedidos/cliente</strong></div>`;
+            if (top5.length > 0) {
+                html += '<div style="font-size:12px;color:var(--text-light);margin-bottom:8px;font-weight:600">Top Clientes</div>';
+                top5.forEach((c, i) => {
+                    html += `<div class="beh-cust-stat"><span class="beh-cust-rank">${i + 1}</span><span class="beh-cust-name">${c.name}</span><span class="beh-cust-count">${c.count} pedidos</span></div>`;
+                });
+            }
+        }
+        container.innerHTML = html;
     }
 
     // ========================================
