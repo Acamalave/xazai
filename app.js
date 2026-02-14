@@ -1386,6 +1386,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const btnYappy = document.querySelector('btn-yappy');
         if (btnYappy) btnYappy.isButtonLoading = false;
 
+        // If Yappy component failed to load, show error
+        if (!yappyComponentInitialized) {
+            showYappyLoadError();
+        }
+
         // Show scheduled banner if applicable
         const scheduledBanner = $('scheduled-banner');
         if (scheduledSlot) {
@@ -1892,6 +1897,24 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('Yappy V2 web component initialized');
     }
 
+    function showYappyLoadError() {
+        const container = $('yappy-btn-container');
+        if (!container) return;
+        const btnYappy = document.querySelector('btn-yappy');
+        if (btnYappy) btnYappy.style.display = 'none';
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'yappy-error';
+        errorDiv.innerHTML = `
+            <i class="fas fa-exclamation-circle"></i>
+            <span>No se pudo cargar Yappy. </span>
+            <button onclick="location.reload()" style="
+                background:none; border:1px solid #ff6b7a; color:#ff6b7a;
+                padding:4px 12px; border-radius:6px; cursor:pointer; font-size:13px; margin-left:8px;
+            ">Reintentar</button>
+        `;
+        container.appendChild(errorDiv);
+    }
+
     function saveOrderToFirestore(orderId, address, status, total, subtotal) {
         if (typeof db === 'undefined') return;
         const deliveryFee = 4.50;
@@ -1930,8 +1953,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }).catch(err => console.error('Error updating payment status:', err));
     }
 
-    // Initialize Yappy web component after DOM is ready
-    setTimeout(setupYappyWebComponent, 1000);
+    // Initialize Yappy: wait for custom element registration (up to 15s for slow mobile)
+    (function initYappyWithRetry() {
+        const MAX_WAIT_MS = 15000;
+        const startTime = Date.now();
+
+        if (window.customElements && window.customElements.whenDefined) {
+            const timeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('timeout')), MAX_WAIT_MS)
+            );
+            Promise.race([customElements.whenDefined('btn-yappy'), timeout])
+                .then(() => {
+                    console.log('btn-yappy defined after', Date.now() - startTime, 'ms');
+                    setupYappyWebComponent();
+                })
+                .catch(() => {
+                    console.error('Yappy component did not load in', MAX_WAIT_MS, 'ms');
+                    showYappyLoadError();
+                });
+        } else {
+            // Fallback: poll every 500ms for browsers without customElements
+            let attempts = 0;
+            const poll = setInterval(() => {
+                attempts++;
+                const el = document.querySelector('btn-yappy');
+                if (el && typeof el.eventPayment === 'function') {
+                    clearInterval(poll);
+                    setupYappyWebComponent();
+                } else if (attempts >= 30) {
+                    clearInterval(poll);
+                    showYappyLoadError();
+                }
+            }, 500);
+        }
+    })();
 
     function processOrderDirect() {
         // Process order and save to Firestore
