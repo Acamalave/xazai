@@ -951,7 +951,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 200;
+    z-index: 1100;
     padding: 20px;
     animation: fadeIn 0.2s ease;
 }
@@ -1886,6 +1886,52 @@ body {
     color: var(--text);
 }
 
+/* Order Customer Info */
+.order-customer-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+}
+.order-customer-info span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+}
+.order-customer-info i {
+    color: var(--accent);
+    font-size: 11px;
+}
+.order-customer-phone {
+    font-weight: 600;
+    color: var(--text-white) !important;
+}
+.order-customer-address {
+    width: 100%;
+    color: var(--text-light) !important;
+    font-size: 11px;
+}
+/* Item Notes in Order Cards */
+.order-item-note {
+    font-size: 11px;
+    padding: 4px 10px;
+    margin: 2px 0 6px 0;
+    background: rgba(255, 193, 7, 0.15);
+    color: #FFC107;
+    border-left: 3px solid #FFC107;
+    border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+    font-style: italic;
+}
+.order-item-note i {
+    margin-right: 4px;
+    color: #FFC107;
+}
+
 .order-actions {
     display: flex;
     gap: 8px;
@@ -2285,6 +2331,96 @@ body {
     cursor: not-allowed;
     opacity: 0.5;
 }
+
+/* POS Payment Detail Fields (tarjeta, ACH, Yappy) */
+.pos-payment-details {
+    margin-top: 10px;
+    padding: 10px 0 2px;
+}
+.pos-ref-input {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text);
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    margin-top: 6px;
+    outline: none;
+    transition: var(--transition);
+}
+.pos-ref-input:focus { border-color: var(--accent); }
+
+/* POS Customer Search */
+.pos-customer-search {
+    padding: 10px 20px 4px;
+    border-top: 1px solid var(--border);
+}
+.pos-customer-search h4 {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.pos-customer-search h4 i { color: var(--accent); }
+.pos-customer-input-wrap {
+    display: flex;
+    align-items: center;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    padding-left: 10px;
+    gap: 6px;
+}
+.pos-customer-input-wrap > i { color: var(--text-light); font-size: 12px; flex-shrink: 0; }
+.pos-customer-input-wrap input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    padding: 8px 4px;
+    outline: none;
+}
+.pos-customer-search-btn {
+    padding: 8px 14px;
+    border: none;
+    background: var(--gradient-primary);
+    color: white;
+    cursor: pointer;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.pos-customer-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 7px 12px;
+    background: rgba(92, 184, 92, 0.1);
+    border: 1px solid rgba(92, 184, 92, 0.3);
+    border-radius: 6px;
+    font-size: 12px;
+    color: #5cb85c;
+    font-weight: 600;
+}
+.pos-customer-result span { flex: 1; }
+.pos-customer-clear {
+    background: none;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 12px;
+}
+.pos-customer-clear:hover { color: #ff4757; }
+
 
 .pos-charge-btn:not(:disabled):hover {
     transform: translateY(-2px);
@@ -2897,10 +3033,15 @@ body {
 /* POS Tip */
 .pos-tip-section { display: flex; align-items: center; gap: 8px; padding: 8px 0; flex-wrap: wrap; }
 .pos-tip-label { font-size: 13px; color: var(--text-light); min-width: 55px; }
-.pos-tip-options { display: flex; gap: 4px; flex-wrap: wrap; }
+.pos-tip-type-row { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+.pos-tip-type-btn { padding: 3px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-light); cursor: pointer; font-size: 11px; font-weight: 600; transition: var(--transition); letter-spacing: 0.3px; white-space: nowrap; }
+.pos-tip-type-btn.active { background: var(--bg-surface); border-color: var(--accent); color: var(--accent); }
+.pos-tip-options { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
 .pos-tip-btn { padding: 4px 12px; border-radius: 16px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 12px; transition: var(--transition); }
 .pos-tip-btn.active { background: var(--gradient-primary); border-color: var(--accent); color: white; }
-.pos-tip-custom { margin-top: 4px; }
+.pos-tip-pct-btn { padding: 4px 12px; border-radius: 16px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 12px; transition: var(--transition); }
+.pos-tip-pct-btn.active { background: var(--gradient-primary); border-color: var(--accent); color: white; }
+.pos-tip-custom { flex-basis: 100%; margin-top: 2px; }
 .pos-tip-custom .pos-cash-input-wrap { max-width: 120px; }
 
 /* POS Discount Section */
@@ -2942,6 +3083,10 @@ body {
 .inv-tab-btn { padding: 8px 20px; border-radius: 20px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); cursor: pointer; font-size: 14px; transition: var(--transition); }
 .inv-tab-btn.active { background: var(--gradient-primary); border-color: var(--accent); color: white; font-weight: 600; }
 .inv-tab-content.hidden { display: none; }
+.inv-size-filter { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.inv-size-btn { padding: 4px 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-light); cursor: pointer; font-size: 12px; font-weight: 600; transition: var(--transition); }
+.inv-size-btn.active { background: var(--gradient-primary); border-color: var(--accent); color: white; }
+.inv-size-btn i { font-size: 10px; margin-right: 3px; }
 /* Inventory Quantity */
 .inventory-qty-wrap { display: flex; align-items: center; gap: 6px; margin-left: auto; margin-right: 12px; }
 .inventory-qty-input { width: 60px; text-align: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 4px; font-size: 14px; }
@@ -3216,6 +3361,23 @@ body {
 .fact-inv-total-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-light); padding: 4px 0; }
 .fact-inv-total-main { font-size: 18px; font-weight: 700; color: var(--text-white); padding-top: 8px; border-top: 1px solid var(--border); margin-top: 4px; }
 .fact-inv-footer { text-align: center; margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--border); font-size: 11px; color: var(--text-light); }
+
+/* Payment Details in Invoice Detail */
+.fact-payment-details {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(91, 192, 222, 0.08);
+    border: 1px solid rgba(91, 192, 222, 0.2);
+    border-radius: var(--radius-xs);
+}
+.fact-pd-line {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    padding: 3px 0;
+}
+.fact-pd-line span:first-child { color: var(--text-light); }
+.fact-pd-line span:last-child { color: var(--text); font-weight: 600; }
 .fact-modal-actions { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; }
 .fact-print-btn { flex: 1; padding: 12px; background: var(--gradient-primary); color: white; border: none; border-radius: var(--radius-xs); font-family: 'Poppins', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
 
@@ -3749,9 +3911,37 @@ body {
     color: #ff6b9d;
     margin-right: 6px;
 }
+/* Tip type toggle */
+.tip-type-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.tip-type-btn {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--bg-surface);
+    color: var(--text-light);
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+}
+.tip-type-btn i { margin-right: 4px; }
+.tip-type-btn.active {
+    border-color: #ff6b9d;
+    background: rgba(255, 107, 157, 0.1);
+    color: #ff6b9d;
+}
 .tip-options {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
 }
 .tip-btn {
     flex: 1;
@@ -5825,4 +6015,526 @@ body {
     .rating-stars i {
         font-size: 30px;
     }
+}
+
+/* ========================================
+   MESAS / TABLE MANAGEMENT
+   ======================================== */
+
+/* Leyenda de estados */
+.mesas-legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    font-size: 12px;
+}
+.mesa-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+.mesa-legend-item i { font-size: 10px; }
+.mesa-legend-item.libre { color: #5cb85c; }
+.mesa-legend-item.ocupada { color: #ff4757; }
+.mesa-legend-item.cuenta_pedida { color: #f0ad4e; }
+
+/* Grid de tarjetas de mesa */
+.mesas-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.mesa-card {
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 16px;
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-height: 160px;
+    justify-content: center;
+}
+.mesa-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
+.mesa-card.status-libre { border-color: #5cb85c; }
+.mesa-card.status-ocupada { border-color: #ff4757; }
+.mesa-card.status-cuenta_pedida { border-color: #f0ad4e; }
+
+.mesa-card-icon { font-size: 34px; }
+.mesa-card.status-libre .mesa-card-icon { color: #5cb85c; }
+.mesa-card.status-ocupada .mesa-card-icon { color: #ff4757; }
+.mesa-card.status-cuenta_pedida .mesa-card-icon { color: #f0ad4e; }
+
+.mesa-card-name { font-size: 16px; font-weight: 700; color: var(--text-white); }
+.mesa-card-status {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.mesa-card.status-libre .mesa-card-status { background: rgba(92,184,92,0.15); color: #5cb85c; }
+.mesa-card.status-ocupada .mesa-card-status { background: rgba(255,71,87,0.15); color: #ff4757; }
+.mesa-card.status-cuenta_pedida .mesa-card-status { background: rgba(240,173,78,0.15); color: #f0ad4e; }
+.mesa-card-info { font-size: 12px; color: var(--text-light); }
+.mesa-card-total { font-size: 18px; font-weight: 700; color: var(--accent); }
+
+.mesas-actions-bar { display: flex; gap: 10px; padding: 4px 0 10px; }
+.mesas-add-btn {
+    padding: 10px 20px;
+    background: var(--gradient-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-xs);
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Detalle de mesa */
+.mesa-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+.mesa-back-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text);
+    border-radius: var(--radius-xs);
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mesa-back-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mesa-detail-header h3 { font-size: 20px; font-weight: 700; color: var(--text-white); }
+
+.mesa-detail-status {
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.badge-libre { background: rgba(92,184,92,0.15); color: #5cb85c; }
+.badge-ocupada { background: rgba(255,71,87,0.15); color: #ff4757; }
+.badge-cuenta_pedida { background: rgba(240,173,78,0.15); color: #f0ad4e; }
+
+.mesa-diner-count-ctrl {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-light);
+}
+.mesa-count-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: var(--transition);
+}
+.mesa-count-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Tabs de comensales */
+.mesa-diners {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+.mesa-diner-tab {
+    min-width: 130px;
+    padding: 12px 14px;
+    background: var(--bg-card);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+    flex-shrink: 0;
+}
+.mesa-diner-tab:hover { border-color: var(--primary-light); }
+.mesa-diner-tab.active { border-color: var(--accent); background: rgba(233,30,140,0.08); }
+.mesa-diner-tab-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.mesa-diner-tab-info { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+.mesa-diner-tab-add {
+    border-style: dashed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-size: 20px;
+    min-width: 50px;
+}
+.mesa-diner-tab-add:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Layout de pedido tipo POS */
+.mesa-order-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.mesa-products-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.mesa-diner-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.mesa-diner-name-edit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface);
+}
+.mesa-diner-name-edit i { color: var(--accent); font-size: 13px; flex-shrink: 0; }
+.mesa-diner-name-edit input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    outline: none;
+}
+.mesa-save-name-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: rgba(92,184,92,0.2);
+    color: #5cb85c;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.mesa-diner-items {
+    flex: 1;
+    padding: 10px 14px;
+    overflow-y: auto;
+    max-height: 320px;
+    min-height: 120px;
+}
+.mesa-diner-item-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 12px;
+}
+.mesa-diner-item-name { flex: 1; color: var(--text); }
+.mesa-diner-item-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.mesa-qty-btn {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+.mesa-remove-item-btn {
+    border: none;
+    background: none;
+    color: #ff4757;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 4px;
+    opacity: 0.7;
+}
+.mesa-remove-item-btn:hover { opacity: 1; }
+.mesa-diner-item-price { color: var(--accent); font-weight: 600; white-space: nowrap; }
+.mesa-diner-totals {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-white);
+}
+
+/* Sección de cuenta de mesa */
+.mesa-bill-section {
+    margin-bottom: 20px;
+    padding: 20px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.mesa-bill-section h4 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-white);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.mesa-bill-section h4 i { color: var(--accent); }
+.mesa-bill-diner-card {
+    padding: 12px 14px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-xs);
+    margin-bottom: 8px;
+}
+.mesa-bill-diner-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-white);
+    margin-bottom: 6px;
+}
+.mesa-bill-diner-items {
+    font-size: 11px;
+    color: var(--text-light);
+    line-height: 1.7;
+    margin-bottom: 8px;
+}
+.mesa-pay-diner-btn {
+    padding: 7px 14px;
+    background: rgba(92,184,92,0.15);
+    border: 1px solid rgba(92,184,92,0.3);
+    color: #5cb85c;
+    border-radius: 6px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mesa-pay-diner-btn:hover { background: rgba(92,184,92,0.25); }
+.mesa-bill-total-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-white);
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+    margin-bottom: 14px;
+}
+.mesa-bill-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.mesa-bill-btn {
+    flex: 1;
+    padding: 12px;
+    background: var(--gradient-primary);
+    border: none;
+    color: white;
+    border-radius: var(--radius-xs);
+    font-family: 'Poppins', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+/* Barra de acciones de mesa */
+.mesa-action-bar {
+    display: flex;
+    gap: 10px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+}
+.mesa-action-btn {
+    padding: 14px 24px;
+    border: none;
+    border-radius: var(--radius-xs);
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: white;
+}
+.mesa-btn-open { background: #5cb85c; }
+.mesa-btn-open:hover { background: #4cae4c; }
+.mesa-btn-bill { background: #f0ad4e; }
+.mesa-btn-bill:hover { background: #ec971f; }
+.mesa-btn-close { background: var(--gradient-primary); }
+
+/* Modal de pago de mesa */
+#mesa-pay-modal { z-index: 1100; }
+.mesa-pay-content {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    width: 100%;
+    max-width: 460px;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+}
+.mesa-pay-content h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-white);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.mesa-pay-content h3 i { color: var(--accent); }
+.mesa-pay-summary {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+}
+.mesa-pay-summary-items {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    margin-bottom: 8px;
+    color: var(--text-light);
+}
+.mesa-pay-sub {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    color: var(--text);
+    border-top: 1px solid var(--border);
+    padding-top: 8px;
+}
+.mesa-pay-tip-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-light);
+    flex-wrap: wrap;
+}
+.mesa-tip-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text-light);
+    border-radius: 6px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+.mesa-tip-btn.active {
+    border-color: #ff6b9d;
+    background: rgba(255,107,157,0.12);
+    color: #ff6b9d;
+}
+.mesa-pay-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 16px;
+    color: var(--text);
+    margin: 14px 0;
+}
+.mesa-pay-total-row strong {
+    font-size: 22px;
+    color: var(--accent);
+}
+.mesa-method-btn {
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text-light);
+    border-radius: var(--radius-xs);
+    font-family: 'Poppins', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mesa-method-btn.active {
+    background: var(--gradient-primary);
+    color: white;
+    border-color: var(--accent);
+}
+
+/* Responsive Mesas — tablet first */
+@media (max-width: 1000px) {
+    .mesa-order-layout {
+        grid-template-columns: 1fr;
+    }
+    .mesa-diner-panel {
+        order: -1;
+    }
+}
+@media (max-width: 700px) {
+    .mesas-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .mesa-detail-header { gap: 8px; }
+    .mesa-action-btn { padding: 12px 16px; font-size: 12px; }
 }

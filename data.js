@@ -277,7 +277,8 @@ const MENU_ITEMS = [
         image: 'images/muscle-kong.jpg',
         emoji: '🦍',
         badge: 'Proteico',
-        onlyGrande: true
+        onlyGrande: true,
+        noProtein: true
     },
 
     // ==================== JUGOS ====================

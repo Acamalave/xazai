@@ -263,6 +263,10 @@
                     <i class="fas fa-file-invoice-dollar"></i>
                     <span>Facturación</span>
                 </button>
+                <button class="admin-nav-btn" data-section="mesas">
+                    <i class="fas fa-chair"></i>
+                    <span>Mesas</span>
+                </button>
                 <button class="admin-nav-btn" data-section="rrhh">
                     <i class="fas fa-id-badge"></i>
                     <span>RRHH</span>
@@ -348,12 +352,22 @@
                             </div>
                             <div class="pos-tip-section">
                                 <span class="pos-tip-label">Propina</span>
-                                <div class="pos-tip-options">
+                                <div class="pos-tip-type-row">
+                                    <button class="pos-tip-type-btn active" data-pos-tip-type="fixed">$ Fijo</button>
+                                    <button class="pos-tip-type-btn" data-pos-tip-type="percent">% Pct</button>
+                                </div>
+                                <div class="pos-tip-options" id="pos-tip-opts-fixed">
                                     <button class="pos-tip-btn active" data-tip="0">Sin</button>
                                     <button class="pos-tip-btn" data-tip="1">$1</button>
                                     <button class="pos-tip-btn" data-tip="2">$2</button>
                                     <button class="pos-tip-btn" data-tip="5">$5</button>
                                     <button class="pos-tip-btn" data-tip="custom">Otro</button>
+                                </div>
+                                <div class="pos-tip-options hidden" id="pos-tip-opts-percent">
+                                    <button class="pos-tip-pct-btn" data-pct="10">10%</button>
+                                    <button class="pos-tip-pct-btn" data-pct="15">15%</button>
+                                    <button class="pos-tip-pct-btn" data-pct="18">18%</button>
+                                    <button class="pos-tip-pct-btn" data-pct="20">20%</button>
                                 </div>
                                 <div class="pos-tip-custom hidden" id="pos-tip-custom">
                                     <div class="pos-cash-input-wrap"><span>$</span><input type="number" id="pos-tip-amount" placeholder="0.00" min="0" step="0.01"></div>
@@ -367,6 +381,7 @@
                                 <button class="pos-method-btn active" data-method="efectivo"><i class="fas fa-money-bill-wave"></i> Efectivo</button>
                                 <button class="pos-method-btn" data-method="yappy"><i class="fas fa-mobile-alt"></i> Yappy</button>
                                 <button class="pos-method-btn" data-method="tarjeta"><i class="fas fa-credit-card"></i> Tarjeta</button>
+                                <button class="pos-method-btn" data-method="ach"><i class="fas fa-university"></i> ACH</button>
                             </div>
                             <div class="pos-cash-change" id="pos-cash-change">
                                 <div class="pos-cash-row">
@@ -380,6 +395,39 @@
                                     <label>Cambio:</label>
                                     <span id="pos-change-amount" class="pos-change-value">$0.00</span>
                                 </div>
+                            </div>
+                            <!-- Payment detail fields per method -->
+                            <div class="pos-payment-details hidden" id="pos-payment-details-tarjeta">
+                                <div class="pos-cash-row">
+                                    <label><i class="fas fa-credit-card"></i> Últimos 4 dígitos / Ref:</label>
+                                    <input type="text" id="pos-tarjeta-ref" placeholder="1234 o referencia" maxlength="30" class="pos-ref-input">
+                                </div>
+                            </div>
+                            <div class="pos-payment-details hidden" id="pos-payment-details-ach">
+                                <div class="pos-cash-row">
+                                    <label><i class="fas fa-university"></i> No. Referencia ACH:</label>
+                                    <input type="text" id="pos-ach-ref" placeholder="Referencia de transferencia" maxlength="40" class="pos-ref-input">
+                                </div>
+                            </div>
+                            <div class="pos-payment-details hidden" id="pos-payment-details-yappy">
+                                <div class="pos-cash-row">
+                                    <label><i class="fas fa-mobile-alt"></i> Referencia Yappy:</label>
+                                    <input type="text" id="pos-yappy-ref" placeholder="Ref. de transacción Yappy" maxlength="40" class="pos-ref-input">
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Customer search for POS -->
+                        <div class="pos-customer-search">
+                            <h4><i class="fas fa-user-tag"></i> Cliente (Opcional)</h4>
+                            <div class="pos-customer-input-wrap">
+                                <i class="fas fa-phone"></i>
+                                <input type="tel" id="pos-customer-phone" placeholder="Buscar por teléfono..." inputmode="numeric">
+                                <button class="pos-customer-search-btn" id="pos-customer-search-btn"><i class="fas fa-search"></i></button>
+                            </div>
+                            <div class="pos-customer-result hidden" id="pos-customer-result">
+                                <i class="fas fa-user-check"></i>
+                                <span id="pos-customer-name-display"></span>
+                                <button class="pos-customer-clear" id="pos-customer-clear"><i class="fas fa-times"></i></button>
                             </div>
                         </div>
                         <button class="pos-charge-btn" id="pos-charge-btn" disabled>
@@ -413,6 +461,11 @@
                     <button class="inv-tab-btn" data-inv-tab="ingredientes">Ingredientes</button>
                 </div>
                 <div id="inv-tab-productos" class="inv-tab-content">
+                    <div class="inv-size-filter" id="inv-size-filter">
+                        <button class="inv-size-btn active" data-size-filter="all">Todos</button>
+                        <button class="inv-size-btn" data-size-filter="both"><i class="fas fa-arrows-alt-h"></i> M + G</button>
+                        <button class="inv-size-btn" data-size-filter="grande"><i class="fas fa-expand-alt"></i> Solo G</button>
+                    </div>
                     <div class="inventory-list" id="inventory-list"></div>
                 </div>
                 <div id="inv-tab-ingredientes" class="inv-tab-content hidden">
@@ -724,6 +777,88 @@
                 </div>
             </section>
 
+            <!-- MESAS / TABLE MANAGEMENT Section -->
+            <section id="admin-sec-mesas" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-chair"></i> Atención de Mesas</h2>
+                    <p class="admin-section-subtitle">Asigna comensales, toma pedidos y gestiona cuentas por separado</p>
+                </div>
+
+                <!-- Vista Mapa de Mesas -->
+                <div class="mesas-map-view" id="mesas-map-view">
+                    <div class="mesas-legend">
+                        <span class="mesa-legend-item libre"><i class="fas fa-circle"></i> Libre</span>
+                        <span class="mesa-legend-item ocupada"><i class="fas fa-circle"></i> Ocupada</span>
+                        <span class="mesa-legend-item cuenta_pedida"><i class="fas fa-circle"></i> Cuenta pedida</span>
+                    </div>
+                    <div class="mesas-grid" id="mesas-grid">
+                        <!-- Cards renderizadas por JS -->
+                    </div>
+                    <div class="mesas-actions-bar">
+                        <button class="mesas-add-btn" id="mesas-add-table"><i class="fas fa-plus"></i> Agregar Mesa</button>
+                    </div>
+                </div>
+
+                <!-- Vista Detalle de Mesa (oculta por defecto) -->
+                <div class="mesa-detail hidden" id="mesa-detail">
+                    <div class="mesa-detail-header">
+                        <button class="mesa-back-btn" id="mesa-back-btn"><i class="fas fa-arrow-left"></i> Volver</button>
+                        <h3 id="mesa-detail-title">Mesa 1</h3>
+                        <span class="mesa-detail-status badge-libre" id="mesa-detail-status">Libre</span>
+                        <div class="mesa-diner-count-ctrl" id="mesa-diner-count-ctrl">
+                            <span>Comensales:</span>
+                            <button class="mesa-count-btn" id="mesa-diner-minus"><i class="fas fa-minus"></i></button>
+                            <span id="mesa-diner-count-display">4</span>
+                            <button class="mesa-count-btn" id="mesa-diner-plus"><i class="fas fa-plus"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Tabs de comensales -->
+                    <div class="mesa-diners" id="mesa-diners"></div>
+
+                    <!-- Layout de pedido: productos | cuenta del comensal -->
+                    <div class="mesa-order-layout" id="mesa-order-layout">
+                        <div class="mesa-products-panel">
+                            <div class="pos-categories" id="mesa-categories"></div>
+                            <div class="pos-products-grid" id="mesa-products-grid"></div>
+                        </div>
+                        <div class="mesa-diner-panel">
+                            <div class="mesa-diner-name-edit">
+                                <i class="fas fa-user"></i>
+                                <input type="text" id="mesa-diner-name-input" placeholder="Nombre del comensal">
+                                <button class="mesa-save-name-btn" id="mesa-save-name-btn"><i class="fas fa-check"></i></button>
+                            </div>
+                            <div class="mesa-diner-items" id="mesa-diner-items">
+                                <p class="pos-empty">Selecciona productos para este comensal</p>
+                            </div>
+                            <div class="mesa-diner-totals">
+                                <div class="pos-total-line"><span>Subtotal comensal:</span><span id="mesa-diner-subtotal">$0.00</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resumen de cuenta de toda la mesa -->
+                    <div class="mesa-bill-section hidden" id="mesa-bill-section">
+                        <h4><i class="fas fa-file-invoice-dollar"></i> Cuenta de la Mesa</h4>
+                        <div id="mesa-bill-diners"></div>
+                        <div class="mesa-bill-total-row">
+                            <span>Total Mesa</span>
+                            <span id="mesa-bill-total">$0.00</span>
+                        </div>
+                        <div class="mesa-bill-actions">
+                            <button class="mesa-bill-btn" id="mesa-bill-pay-all"><i class="fas fa-users"></i> Cobrar Todo Junto</button>
+                        </div>
+                    </div>
+
+                    <!-- Botones de acción de mesa -->
+                    <div class="mesa-action-bar">
+                        <button class="mesa-action-btn mesa-btn-open hidden" id="mesa-open-btn"><i class="fas fa-door-open"></i> Abrir Mesa</button>
+                        <button class="mesa-action-btn mesa-btn-bill hidden" id="mesa-request-bill-btn"><i class="fas fa-file-invoice"></i> Pedir Cuenta</button>
+                        <button class="mesa-action-btn mesa-btn-close hidden" id="mesa-close-btn"><i class="fas fa-check-circle"></i> Cerrar Mesa</button>
+                    </div>
+                </div>
+            </section>
+
         </main>
 
         <!-- Attendance Auto-Scan Overlay (direct child of admin-dashboard, outside <main> to avoid overflow:auto clipping) -->
@@ -818,11 +953,23 @@
 
             <div class="tip-section">
                 <h4><i class="fas fa-heart"></i> ¿Deseas dejar propina?</h4>
-                <div class="tip-options" id="tip-options">
-                    <button class="tip-btn" data-tip="0.90">$0.90</button>
-                    <button class="tip-btn" data-tip="1.50">$1.50</button>
-                    <button class="tip-btn" data-tip="3.00">$3.00</button>
-                    <button class="tip-btn tip-btn-custom" data-tip="custom"><i class="fas fa-edit"></i> Otra</button>
+                <div class="tip-type-row">
+                    <button class="tip-type-btn active" data-tip-type="percent"><i class="fas fa-percent"></i> Porcentaje</button>
+                    <button class="tip-type-btn" data-tip-type="fixed"><i class="fas fa-dollar-sign"></i> Monto Fijo</button>
+                </div>
+                <div class="tip-options tip-options-percent" id="tip-options-percent">
+                    <button class="tip-btn" data-tip-pct="10">10%</button>
+                    <button class="tip-btn" data-tip-pct="15">15%</button>
+                    <button class="tip-btn" data-tip-pct="18">18%</button>
+                    <button class="tip-btn" data-tip-pct="20">20%</button>
+                </div>
+                <div class="tip-options tip-options-fixed hidden" id="tip-options-fixed">
+                    <button class="tip-btn" data-tip="1">$1</button>
+                    <button class="tip-btn" data-tip="2">$2</button>
+                    <button class="tip-btn" data-tip="5">$5</button>
+                </div>
+                <div class="tip-options">
+                    <button class="tip-btn tip-btn-custom" data-tip="custom"><i class="fas fa-edit"></i> Otra cantidad</button>
                 </div>
                 <div class="tip-custom-input hidden" id="tip-custom-input">
                     <span class="tip-currency">$</span>
@@ -951,6 +1098,39 @@
             <div class="rrhh-confirm-time" id="rrhh-confirm-time">--:--:--</div>
             <div class="rrhh-confirm-date" id="rrhh-confirm-date">--</div>
             <button class="btn-confirm-ok" id="rrhh-confirm-ok">Aceptar</button>
+        </div>
+    </div>
+
+    <!-- MESA PAYMENT MODAL -->
+    <div class="modal-overlay hidden" id="mesa-pay-modal">
+        <div class="mesa-pay-content">
+            <button class="modal-close" id="mesa-pay-close"><i class="fas fa-times"></i></button>
+            <h3><i class="fas fa-cash-register"></i> Cobrar <span id="mesa-pay-title"></span></h3>
+            <div class="mesa-pay-summary" id="mesa-pay-summary"></div>
+            <div class="pos-payment-method" style="padding:0;border:none;">
+                <h4 style="margin-bottom:10px;">Método de Pago</h4>
+                <div class="pos-methods">
+                    <button class="mesa-method-btn active" data-method="efectivo"><i class="fas fa-money-bill-wave"></i> Efectivo</button>
+                    <button class="mesa-method-btn" data-method="yappy"><i class="fas fa-mobile-alt"></i> Yappy</button>
+                    <button class="mesa-method-btn" data-method="tarjeta"><i class="fas fa-credit-card"></i> Tarjeta</button>
+                    <button class="mesa-method-btn" data-method="ach"><i class="fas fa-university"></i> ACH</button>
+                </div>
+            </div>
+            <div class="mesa-pay-tip-row">
+                <span>Propina:</span>
+                <div class="pos-tip-options" style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="mesa-tip-btn active" data-tip="0">Sin propina</button>
+                    <button class="mesa-tip-btn" data-tip="1">$1</button>
+                    <button class="mesa-tip-btn" data-tip="2">$2</button>
+                    <button class="mesa-tip-btn" data-tip="5">$5</button>
+                    <button class="mesa-tip-btn" data-tip="10">$10</button>
+                </div>
+            </div>
+            <div class="mesa-pay-total-row">
+                <span>Total a cobrar:</span>
+                <strong id="mesa-pay-total">$0.00</strong>
+            </div>
+            <button class="pos-charge-btn" id="mesa-confirm-pay" style="margin:0;width:100%;"><i class="fas fa-check-circle"></i> Confirmar Pago</button>
         </div>
     </div>
 

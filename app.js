@@ -1219,18 +1219,22 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if product uses leche in ingredients
             const usesLecheAlm = (product.ingredients || []).some(i => i.toLowerCase().includes('leche de almendras') || i.toLowerCase().includes('agua de coco'));
             const usesLeche = (product.ingredients || []).some(i => i.toLowerCase().includes('leche') && !i.toLowerCase().includes('almendras'));
+            const showProtein = !product.noProtein; // Ocultar si el producto ya incluye proteína
 
-            smoothieOptionsSection = `
+            const hasMilk = usesLeche || usesLecheAlm;
+            if (showProtein || hasMilk) {
+                smoothieOptionsSection = `
                 <div class="expand-section">
                     <h4><i class="fas fa-blender"></i> Personaliza tu Smoothie</h4>
+                    ${showProtein ? `
                     <div style="margin-bottom:10px">
                         <span style="font-size:13px;color:var(--text-light);display:block;margin-bottom:6px">Agregar Proteína (+$2.50)</span>
                         <div class="expand-options-row" id="smoothie-protein-opts">
                             <label class="option-pill active" data-protein="none"><input type="radio" name="sm-protein" value="none" checked>Sin proteína <span class="option-pill-price">$0</span></label>
                             <label class="option-pill" data-protein="sascha"><input type="radio" name="sm-protein" value="sascha">💪 Proteína Sascha <span class="option-pill-price">+$2.50</span></label>
                         </div>
-                    </div>
-                    ${usesLeche || usesLecheAlm ? `
+                    </div>` : ''}
+                    ${hasMilk ? `
                     <div>
                         <span style="font-size:13px;color:var(--text-light);display:block;margin-bottom:6px">Tipo de Leche</span>
                         <div class="expand-options-row" id="smoothie-milk-opts">
@@ -1239,6 +1243,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     </div>` : ''}
                 </div>`;
+            }
         }
 
         return `
@@ -1700,37 +1705,76 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========================================
-    // TIP SELECTION
+    // TIP SELECTION — Percent & Fixed modes
     // ========================================
-    document.querySelectorAll('.tip-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const tipVal = btn.dataset.tip;
 
-            if (tipVal === 'custom') {
-                // Toggle custom input
-                $('tip-custom-input').classList.toggle('hidden');
-                // Deselect preset buttons if custom is chosen
-                document.querySelectorAll('.tip-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                const customInput = $('tip-custom-value');
-                if (customInput) customInput.focus();
-                return;
-            }
+    // Helper: reset all tip buttons
+    function resetTipButtons() {
+        document.querySelectorAll('.tip-btn').forEach(b => b.classList.remove('active'));
+        $('tip-custom-input').classList.add('hidden');
+    }
 
-            // Preset tip
-            $('tip-custom-input').classList.add('hidden');
-            document.querySelectorAll('.tip-btn').forEach(b => b.classList.remove('active'));
+    // Toggle between Porcentaje / Monto Fijo modes
+    document.addEventListener('click', (e) => {
+        const typeBtn = e.target.closest('.tip-type-btn');
+        if (!typeBtn) return;
+        document.querySelectorAll('.tip-type-btn').forEach(b => b.classList.remove('active'));
+        typeBtn.classList.add('active');
+        const tipType = typeBtn.dataset.tipType;
+        $('tip-options-percent').classList.toggle('hidden', tipType !== 'percent');
+        $('tip-options-fixed').classList.toggle('hidden', tipType !== 'fixed');
+        // Reset tip when switching mode
+        currentTip = 0;
+        resetTipButtons();
+        updatePaymentTotals();
+    });
 
-            // Toggle: if same tip clicked again, remove it
-            if (currentTip === parseFloat(tipVal)) {
+    // Percentage tip buttons (data-tip-pct)
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-tip-pct]');
+        if (!btn) return;
+        const pct = parseFloat(btn.dataset.tipPct);
+        const subtotal = cart.reduce((s, i) => s + i.total, 0);
+        const tipValue = Math.round(subtotal * pct / 100 * 100) / 100;
+        if (currentTip === tipValue) {
+            currentTip = 0;
+            resetTipButtons();
+        } else {
+            resetTipButtons();
+            btn.classList.add('active');
+            currentTip = tipValue;
+        }
+        updatePaymentTotals();
+    });
+
+    // Fixed amount tip buttons (data-tip, excluding "custom")
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.tip-btn[data-tip]:not([data-tip="custom"])');
+        if (!btn) return;
+        // Only handle if the fixed row is visible (not the custom trigger)
+        if (btn.closest('.tip-options-percent') || btn.closest('.tip-options-fixed')) {
+            const tipVal = parseFloat(btn.dataset.tip);
+            if (currentTip === tipVal) {
                 currentTip = 0;
+                resetTipButtons();
             } else {
+                resetTipButtons();
                 btn.classList.add('active');
-                currentTip = parseFloat(tipVal);
+                currentTip = tipVal;
             }
             updatePaymentTotals();
-        });
+        }
+    });
+
+    // Custom tip button
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-tip="custom"]');
+        if (!btn) return;
+        $('tip-custom-input').classList.toggle('hidden');
+        document.querySelectorAll('.tip-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const customInput = $('tip-custom-value');
+        if (customInput && !$('tip-custom-input').classList.contains('hidden')) customInput.focus();
     });
 
     // Custom tip apply
@@ -1742,7 +1786,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 updatePaymentTotals();
                 $('tip-custom-input').classList.add('hidden');
                 document.querySelectorAll('.tip-btn').forEach(b => b.classList.remove('active'));
-                document.querySelector('.tip-btn-custom').classList.add('active');
+                const customBtn = document.querySelector('.tip-btn-custom');
+                if (customBtn) customBtn.classList.add('active');
             }
         }
     });
@@ -2501,6 +2546,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let posTipAmount = 0;
     let posDiscountPercent = 0;
     let todaySales = [];
+    let posCustomerInfo = null; // { name, phone } asociado a la venta POS
     let notificationSound = null;
 
     // Create notification sound
@@ -2546,8 +2592,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function exitAdminMode() {
         adminMode = false;
+        localStorage.removeItem('xazai_admin_email');
         // Stop listeners
         if (ordersUnsubscribe) { ordersUnsubscribe(); ordersUnsubscribe = null; }
+        if (mesasUnsubscribe) { mesasUnsubscribe(); mesasUnsubscribe = null; }
         stopRRHHClock();
         stopAttClock();
         closeAttendanceScan();
@@ -2588,6 +2636,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (section === 'rrhh') { loadRRHHRoles(); loadRRHHCollaborators(); }
         if (section === 'asistencia') { startAttClock(); loadRRHHCollaborators(); }
         if (section !== 'asistencia') stopAttClock();
+        if (section === 'mesas') initMesas();
     });
 
     // Admin orders filter
@@ -2666,14 +2715,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div><strong>${order.number || order.id}</strong><span class="order-date">${dateStr}</span></div>
                     <span class="order-status status-${order.status}">${adminStatusLabels[order.status] || order.status}</span>
                 </div>
+                <div class="order-customer-info">
+                    <span class="order-customer-name"><i class="fas fa-user"></i> ${order.customerName || 'Invitado'}</span>
+                    ${order.customerPhone ? `<span class="order-customer-phone"><i class="fas fa-phone"></i> ${order.customerPhone}</span>` : ''}
+                    ${order.address ? `<span class="order-customer-address"><i class="fas fa-map-marker-alt"></i> ${order.address}</span>` : ''}
+                </div>
                 <div class="order-items-list">
-                    ${items.map(item => `<div class="order-item-line"><span>${item.emoji || ''} ${item.name} x${item.quantity} (${item.size || ''})</span><span>$${(item.total || 0).toFixed(2)}</span></div>`).join('')}
+                    ${items.map(item => `<div class="order-item-line"><span>${item.emoji || ''} ${item.name} x${item.quantity || item.qty || 1} (${item.size || ''})</span><span>$${(item.total || 0).toFixed(2)}</span></div>${item.note ? `<div class="order-item-note"><i class="fas fa-sticky-note"></i> ${item.note}</div>` : ''}`).join('')}
                 </div>
                 <div class="order-total-line">
                     <span>Total: <strong>$${(order.total || 0).toFixed(2)}</strong></span>
-                    <span>Cliente: ${order.customerName || 'Invitado'}</span>
+                    <span>${order.paymentMethod || ''}</span>
                 </div>
-                ${order.address ? `<div style="font-size:11px;color:var(--text-light);margin-bottom:8px;"><i class="fas fa-map-marker-alt" style="color:var(--accent);margin-right:4px;"></i>${order.address}</div>` : ''}
                 ${order.status === 'cancelado' && order.cancelReason ? `<div class="order-cancel-reason"><i class="fas fa-ban"></i> ${order.cancelReason}</div>` : ''}
                 <div class="order-actions">
                     ${order.status === 'pendiente' ? `<button class="order-action-btn btn-preparando" data-order-id="${order.id}">Preparando</button>` : ''}
@@ -2751,9 +2804,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function renderInventory() {
+    function renderInventory(sizeFilter = 'all') {
         const container = $('inventory-list');
-        container.innerHTML = MENU_ITEMS.map(item => {
+        // Filtrar por tamaño según selección
+        let filteredItems = MENU_ITEMS;
+        if (sizeFilter === 'both') filteredItems = MENU_ITEMS.filter(i => i.priceGrande && !i.onlyGrande);
+        if (sizeFilter === 'grande') filteredItems = MENU_ITEMS.filter(i => i.onlyGrande);
+        container.innerHTML = filteredItems.map(item => {
             const inv = inventoryCache[String(item.id)];
             const isActive = inv ? inv.active !== false : true;
             const qty = inv && inv.qty !== undefined ? inv.qty : '';
@@ -2788,6 +2845,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
+        // Size filter buttons
+        document.querySelectorAll('.inv-size-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.inv-size-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderInventory(btn.dataset.sizeFilter);
+            });
+        });
+
         // Inventory tab switching
         document.querySelectorAll('.inv-tab-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -2797,6 +2863,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 $('inv-tab-productos').classList.toggle('hidden', tab !== 'productos');
                 $('inv-tab-ingredientes').classList.toggle('hidden', tab !== 'ingredientes');
                 if (tab === 'ingredientes') renderIngredients();
+                if (tab === 'productos') renderInventory('all');
             });
         });
     }
@@ -2897,12 +2964,61 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.querySelectorAll('.pos-method-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 posPaymentMethod = btn.dataset.method;
+                // Toggle cash change section
                 const cashChange = $('pos-cash-change');
                 cashChange.style.display = posPaymentMethod === 'efectivo' ? 'block' : 'none';
+                // Toggle payment detail fields
+                document.querySelectorAll('.pos-payment-details').forEach(d => d.classList.add('hidden'));
+                const detailEl = $('pos-payment-details-' + posPaymentMethod);
+                if (detailEl) detailEl.classList.remove('hidden');
             });
         });
 
-        // Tip buttons
+        // Customer search by phone
+        const custSearchBtn = $('pos-customer-search-btn');
+        if (custSearchBtn) {
+            custSearchBtn.addEventListener('click', searchPOSCustomer);
+        }
+        const custPhoneInput = $('pos-customer-phone');
+        if (custPhoneInput) {
+            custPhoneInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') searchPOSCustomer();
+            });
+        }
+        const custClearBtn = $('pos-customer-clear');
+        if (custClearBtn) {
+            custClearBtn.addEventListener('click', () => {
+                posCustomerInfo = null;
+                $('pos-customer-result').classList.add('hidden');
+                $('pos-customer-phone').value = '';
+            });
+        }
+
+        // Tip type toggle ($ Fijo / % Pct)
+        document.querySelectorAll('.pos-tip-type-btn').forEach(typeBtn => {
+            typeBtn.addEventListener('click', () => {
+                document.querySelectorAll('.pos-tip-type-btn').forEach(b => b.classList.remove('active'));
+                typeBtn.classList.add('active');
+                const mode = typeBtn.dataset.posTipType;
+                if (mode === 'fixed') {
+                    $('pos-tip-opts-fixed').classList.remove('hidden');
+                    $('pos-tip-opts-percent').classList.add('hidden');
+                } else {
+                    $('pos-tip-opts-fixed').classList.add('hidden');
+                    $('pos-tip-opts-percent').classList.remove('hidden');
+                }
+                // Reset tip on mode switch
+                posTipAmount = 0;
+                $('pos-tip-custom').classList.add('hidden');
+                document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
+                const zeroBtn = document.querySelector('.pos-tip-btn[data-tip="0"]');
+                if (zeroBtn) zeroBtn.classList.add('active');
+                document.querySelectorAll('.pos-tip-pct-btn').forEach(b => b.classList.remove('active'));
+                renderPOSInvoice();
+            });
+        });
+
+        // Tip buttons (fixed amounts)
         document.querySelectorAll('.pos-tip-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
@@ -2918,6 +3034,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 renderPOSInvoice();
             });
         });
+
+        // Tip percentage buttons
+        document.querySelectorAll('.pos-tip-pct-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.pos-tip-pct-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                $('pos-tip-custom').classList.add('hidden');
+                const pct = parseFloat(btn.dataset.pct) || 0;
+                const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+                const discountAmt = subtotal * (posDiscountPercent / 100);
+                const afterDiscount = subtotal - discountAmt;
+                posTipAmount = Math.round(afterDiscount * pct / 100 * 100) / 100;
+                renderPOSInvoice();
+            });
+        });
+
         const tipCustomInput = $('pos-tip-amount');
         if (tipCustomInput) {
             tipCustomInput.addEventListener('input', () => {
@@ -3196,6 +3328,80 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Busca cliente por teléfono en la colección de pedidos
+    function searchPOSCustomer() {
+        const phoneInput = $('pos-customer-phone');
+        if (!phoneInput) return;
+        const phone = phoneInput.value.trim();
+        if (!phone || phone.length < 4) { showToast('Ingresa un número de teléfono', 'warning'); return; }
+
+        const tryFind = (phoneQuery) => {
+            return db.collection('orders')
+                .where('customerPhone', '==', phoneQuery)
+                .orderBy('createdAt', 'desc')
+                .limit(1)
+                .get();
+        };
+
+        tryFind(phone).then(snap => {
+            if (!snap.empty) {
+                const d = snap.docs[0].data();
+                posCustomerInfo = { name: d.customerName || '', phone: d.customerPhone || phone };
+            } else {
+                // Try with +507 prefix
+                return tryFind('+507' + phone).then(snap2 => {
+                    if (!snap2.empty) {
+                        const d = snap2.docs[0].data();
+                        posCustomerInfo = { name: d.customerName || '', phone: d.customerPhone || phone };
+                    } else {
+                        posCustomerInfo = { name: '', phone: phone };
+                        showToast('Cliente no encontrado. Se guardará el teléfono.', 'info');
+                    }
+                });
+            }
+        }).then(() => {
+            if (posCustomerInfo) {
+                const label = posCustomerInfo.name ? `${posCustomerInfo.name} (${posCustomerInfo.phone})` : posCustomerInfo.phone;
+                $('pos-customer-name-display').textContent = label;
+                $('pos-customer-result').classList.remove('hidden');
+                if (posCustomerInfo.name) showToast(`Cliente: ${posCustomerInfo.name}`, 'success');
+            }
+        }).catch(() => showToast('Error buscando cliente', 'warning'));
+    }
+
+    // Captura detalles de pago según el método activo en POS
+    function getPOSPaymentDetails() {
+        const details = {};
+        if (posPaymentMethod === 'efectivo') {
+            const received = parseFloat($('pos-cash-received') ? $('pos-cash-received').value : '0') || 0;
+            const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
+            const discAmount = subtotal * (posDiscountPercent / 100);
+            const total = (subtotal - discAmount) + posTipAmount;
+            details.cashReceived = received;
+            details.changeGiven = Math.max(0, Math.round((received - total) * 100) / 100);
+        } else if (posPaymentMethod === 'tarjeta') {
+            details.reference = ($('pos-tarjeta-ref') ? $('pos-tarjeta-ref').value : '').trim();
+        } else if (posPaymentMethod === 'ach') {
+            details.reference = ($('pos-ach-ref') ? $('pos-ach-ref').value : '').trim();
+        } else if (posPaymentMethod === 'yappy') {
+            details.reference = ($('pos-yappy-ref') ? $('pos-yappy-ref').value : '').trim();
+        }
+        return details;
+    }
+
+    // Limpia campos de referencia y cliente tras venta
+    function resetPOSExtras() {
+        posCustomerInfo = null;
+        const custResult = $('pos-customer-result');
+        if (custResult) custResult.classList.add('hidden');
+        const custPhone = $('pos-customer-phone');
+        if (custPhone) custPhone.value = '';
+        document.querySelectorAll('.pos-payment-details').forEach(d => d.classList.add('hidden'));
+        ['pos-tarjeta-ref', 'pos-ach-ref', 'pos-yappy-ref'].forEach(id => {
+            const el = $(id); if (el) el.value = '';
+        });
+    }
+
     function processPOSSale() {
         if (posCart.length === 0) return;
         const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -3211,6 +3417,9 @@ document.addEventListener('DOMContentLoaded', function() {
             tip: posTipAmount,
             total,
             paymentMethod: posPaymentMethod,
+            paymentDetails: getPOSPaymentDetails(),
+            customerName: posCustomerInfo ? posCustomerInfo.name : '',
+            customerPhone: posCustomerInfo ? posCustomerInfo.phone : '',
             deviceType: detectDeviceType(),
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             date: new Date().toLocaleDateString('es-PA')
@@ -3235,6 +3444,7 @@ document.addEventListener('DOMContentLoaded', function() {
             renderPOSInvoice();
             const cashInput = $('pos-cash-received');
             if (cashInput) { cashInput.value = ''; $('pos-change-amount').textContent = '$0.00'; }
+            resetPOSExtras();
             loadTodaySales();
         }).catch(err => showToast('Error registrando venta', 'warning'));
     }
@@ -3275,6 +3485,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // ADMIN ACCESS (click logo)
     // ========================================
     (function() {
+        // Auto-login si el dispositivo recuerda al admin
+        const savedAdminEmail = localStorage.getItem('xazai_admin_email');
+        if (savedAdminEmail) {
+            const isAdmin = USERS.find(u => u.role === 'admin' && u.email === savedAdminEmail);
+            if (isAdmin) {
+                currentUser = { username: savedAdminEmail, role: 'admin', name: isAdmin.name || 'Admin', email: savedAdminEmail };
+                userName.textContent = isAdmin.name || 'Admin';
+                loginTriggerBtn.classList.add('hidden');
+                logoutBtn.classList.remove('hidden');
+                adminPanelBtn.classList.remove('hidden');
+                enterAdminMode();
+            } else {
+                // Email guardado ya no es válido, limpiar
+                localStorage.removeItem('xazai_admin_email');
+            }
+        }
+
         const logoEl = document.querySelector('.logo-img-nav') || document.querySelector('.logo-small');
         if (!logoEl) return;
 
@@ -3328,7 +3555,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     $('admin-login-modal').classList.add('hidden');
                     document.body.style.overflow = '';
-                    $('admin-login-email').value = '';
+                    localStorage.setItem('xazai_admin_email', email);
                     showToast('Bienvenido, Administrador', 'success');
 
                     // Enter full admin mode
@@ -4787,6 +5014,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     phone: d.customerPhone || '',
                     address: d.address || '',
                     method: d.paymentMethod || 'efectivo',
+                    paymentDetails: d.paymentDetails || {},
                     status: d.status || 'pendiente',
                     date: d.createdAt ? d.createdAt.toDate() : new Date()
                 });
@@ -4805,8 +5033,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     discount: d.discountAmount || 0,
                     discountPct: d.discount || 0,
                     total: d.total || 0,
-                    customer: 'Venta POS',
+                    customer: d.customerName || (d.source === 'mesa' ? `Mesa ${d.tableNumber || ''}` : 'Venta POS'),
+                    phone: d.customerPhone || '',
                     method: d.paymentMethod || 'efectivo',
+                    paymentDetails: d.paymentDetails || {},
                     status: 'completado',
                     date: d.createdAt ? d.createdAt.toDate() : new Date()
                 });
@@ -4899,6 +5129,23 @@ document.addEventListener('DOMContentLoaded', function() {
         if (inv.tip > 0) totalsHtml += `<div class="fact-inv-total-line"><span>Propina</span><span>$${inv.tip.toFixed(2)}</span></div>`;
         totalsHtml += `<div class="fact-inv-total-line fact-inv-total-main"><span>Total</span><span>$${inv.total.toFixed(2)}</span></div>`;
 
+        // Build payment detail block based on method
+        let paymentDetailsHtml = '';
+        const pd = inv.paymentDetails || {};
+        if (inv.method === 'efectivo' && pd.cashReceived) {
+            paymentDetailsHtml = `
+                <div class="fact-payment-details">
+                    <div class="fact-pd-line"><span>Efectivo recibido:</span><span>$${Number(pd.cashReceived).toFixed(2)}</span></div>
+                    <div class="fact-pd-line"><span>Cambio:</span><span>$${Number(pd.changeGiven || 0).toFixed(2)}</span></div>
+                </div>`;
+        } else if ((inv.method === 'tarjeta' || inv.method === 'ach' || inv.method === 'yappy') && pd.reference) {
+            const labels = { tarjeta: 'Referencia tarjeta', ach: 'Ref. ACH / Transferencia', yappy: 'Ref. Yappy' };
+            paymentDetailsHtml = `
+                <div class="fact-payment-details">
+                    <div class="fact-pd-line"><span>${labels[inv.method] || 'Referencia'}:</span><span>${pd.reference}</span></div>
+                </div>`;
+        }
+
         bodyEl.innerHTML = `
             <div class="fact-inv-header">
                 <div class="fact-inv-logo">XAZAI</div>
@@ -4906,10 +5153,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="fact-inv-number">${inv.number}</div>
                 <div class="fact-inv-date">${dateStr}</div>
             </div>
-            ${inv.customer !== 'Venta POS' ? `<div style="font-size:12px;color:var(--text-light);margin-bottom:12px"><strong>Cliente:</strong> ${inv.customer}${inv.phone ? ' · ' + inv.phone : ''}${inv.address ? '<br><strong>Dirección:</strong> ' + inv.address : ''}</div>` : ''}
+            ${inv.customer ? `<div style="font-size:12px;color:var(--text-light);margin-bottom:12px"><strong>Cliente:</strong> ${inv.customer}${inv.phone ? ' · ' + inv.phone : ''}${inv.address ? '<br><strong>Dirección:</strong> ' + inv.address : ''}</div>` : ''}
             <div class="fact-inv-items">${itemsHtml}</div>
             <div class="fact-inv-totals">${totalsHtml}</div>
             <div style="font-size:11px;color:var(--text-light);margin-top:8px"><strong>Método de pago:</strong> ${inv.method}</div>
+            ${paymentDetailsHtml}
             <div class="fact-inv-footer">¡Gracias por tu compra! 💜<br>XAZAI - Açai Bar & Smoothies</div>
         `;
 
@@ -5215,6 +5463,618 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         container.innerHTML = html;
+    }
+
+    // ========================================
+    // MESAS — Table Management
+    // ========================================
+    let mesasData = [];
+    let mesasUnsubscribe = null;
+    let currentMesa = null;
+    let currentDinerIdx = 0;
+    let mesaPayTip = 0;
+    let mesaPayMethod = 'efectivo';
+    let mesaPayDinerIdx = null; // null = pagar toda la mesa
+
+    function initMesas() {
+        if (mesasUnsubscribe) {
+            renderMesasGrid(); // ya hay listener, solo redibujar
+            return;
+        }
+        startMesasListener();
+    }
+
+    function startMesasListener() {
+        mesasUnsubscribe = db.collection('tables').orderBy('tableNumber').onSnapshot(snapshot => {
+            if (snapshot.empty) {
+                // Sembrar 4 mesas iniciales
+                for (let i = 1; i <= 4; i++) {
+                    db.collection('tables').add({
+                        tableNumber: i,
+                        tableName: 'Mesa ' + i,
+                        maxDiners: 4,
+                        status: 'libre',
+                        diners: [],
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        openedAt: null,
+                        sessionId: ''
+                    });
+                }
+                return;
+            }
+            mesasData = [];
+            snapshot.forEach(doc => mesasData.push({ id: doc.id, ...doc.data() }));
+            renderMesasGrid();
+            // Si hay detalle abierto, actualizarlo
+            if (currentMesa) {
+                const updated = mesasData.find(m => m.id === currentMesa.id);
+                if (updated) { currentMesa = updated; refreshMesaDetail(); }
+            }
+        }, err => console.error('Mesas listener error:', err));
+    }
+
+    // ---- VISTA MAPA ----
+    function renderMesasGrid() {
+        const grid = $('mesas-grid');
+        if (!grid) return;
+        const statusLabels = { libre: 'Libre', ocupada: 'Ocupada', cuenta_pedida: 'Cuenta pedida' };
+        const statusIcons = { libre: 'fa-chair', ocupada: 'fa-utensils', cuenta_pedida: 'fa-file-invoice-dollar' };
+        grid.innerHTML = mesasData.map(m => {
+            const total = (m.diners || []).reduce((s, d) => {
+                return s + (d.items || []).reduce((ds, it) => ds + (it.price * it.qty), 0);
+            }, 0);
+            const dinerCount = (m.diners || []).length;
+            return `
+            <div class="mesa-card status-${m.status}" data-mesa-id="${m.id}">
+                <div class="mesa-card-icon"><i class="fas ${statusIcons[m.status] || 'fa-chair'}"></i></div>
+                <div class="mesa-card-name">${m.tableName || 'Mesa ' + m.tableNumber}</div>
+                <div class="mesa-card-status">${statusLabels[m.status] || m.status}</div>
+                <div class="mesa-card-info">${m.status !== 'libre' ? `${dinerCount} comensal${dinerCount !== 1 ? 'es' : ''}` : `${m.maxDiners || 4} asientos`}</div>
+                ${m.status !== 'libre' && total > 0 ? `<div class="mesa-card-total">$${total.toFixed(2)}</div>` : ''}
+            </div>`;
+        }).join('');
+
+        grid.querySelectorAll('.mesa-card').forEach(card => {
+            card.addEventListener('click', () => openMesaDetail(card.dataset.mesaId));
+        });
+    }
+
+    function openMesaDetail(mesaId) {
+        currentMesa = mesasData.find(m => m.id === mesaId);
+        if (!currentMesa) return;
+        currentDinerIdx = 0;
+        $('mesas-map-view').classList.add('hidden');
+        const detail = $('mesa-detail');
+        detail.classList.remove('hidden');
+        refreshMesaDetail();
+        renderMesaProducts('all');
+        bindMesaDetailEvents();
+    }
+
+    function refreshMesaDetail() {
+        if (!currentMesa) return;
+        $('mesa-detail-title').textContent = currentMesa.tableName || 'Mesa ' + currentMesa.tableNumber;
+        const statusEl = $('mesa-detail-status');
+        const statusLabels = { libre: 'Libre', ocupada: 'Ocupada', cuenta_pedida: 'Cuenta pedida' };
+        statusEl.textContent = statusLabels[currentMesa.status] || currentMesa.status;
+        statusEl.className = 'mesa-detail-status badge-' + currentMesa.status;
+
+        // Botones de acción según estado
+        const openBtn = $('mesa-open-btn');
+        const billBtn = $('mesa-request-bill-btn');
+        const closeBtn = $('mesa-close-btn');
+        openBtn.classList.toggle('hidden', currentMesa.status !== 'libre');
+        billBtn.classList.toggle('hidden', currentMesa.status !== 'ocupada');
+        closeBtn.classList.toggle('hidden', currentMesa.status !== 'cuenta_pedida');
+
+        // Panel de pedido: visible si mesa está ocupada/cuenta
+        const orderLayout = $('mesa-order-layout');
+        orderLayout.classList.toggle('hidden', currentMesa.status === 'libre');
+
+        // Diner count control: solo si libre
+        const countCtrl = $('mesa-diner-count-ctrl');
+        if (countCtrl) {
+            $('mesa-diner-count-display').textContent = currentMesa.maxDiners || 4;
+        }
+
+        renderMesaDiners();
+
+        // Sección de cuenta
+        const billSection = $('mesa-bill-section');
+        billSection.classList.toggle('hidden', currentMesa.status !== 'cuenta_pedida');
+        if (currentMesa.status === 'cuenta_pedida') renderMesaBill();
+    }
+
+    // ---- COMENSALES ----
+    function renderMesaDiners() {
+        const container = $('mesa-diners');
+        if (!container) return;
+        const diners = currentMesa.diners || [];
+        if (!diners.length) { container.innerHTML = ''; return; }
+
+        container.innerHTML = diners.map((d, idx) => {
+            const itemCount = (d.items || []).reduce((s, it) => s + it.qty, 0);
+            const subtotal = (d.items || []).reduce((s, it) => s + it.price * it.qty, 0);
+            return `
+            <div class="mesa-diner-tab ${idx === currentDinerIdx ? 'active' : ''}" data-diner-idx="${idx}">
+                <div class="mesa-diner-tab-name">${d.name || 'Comensal ' + (idx + 1)}</div>
+                <div class="mesa-diner-tab-info">${itemCount} item${itemCount !== 1 ? 's' : ''} · $${subtotal.toFixed(2)}</div>
+            </div>`;
+        }).join('') + `<div class="mesa-diner-tab mesa-diner-tab-add" id="mesa-add-diner-tab" title="Agregar comensal"><i class="fas fa-plus"></i></div>`;
+
+        container.querySelectorAll('.mesa-diner-tab[data-diner-idx]').forEach(tab => {
+            tab.addEventListener('click', () => {
+                currentDinerIdx = parseInt(tab.dataset.dinerIdx);
+                renderMesaDiners();
+                renderCurrentDinerItems();
+                updateMesaDinerSubtotal();
+            });
+        });
+
+        const addTab = $('mesa-add-diner-tab');
+        if (addTab) addTab.addEventListener('click', addMesaDiner);
+
+        renderCurrentDinerItems();
+        updateMesaDinerSubtotal();
+        // Sync name input
+        const nameInput = $('mesa-diner-name-input');
+        if (nameInput && diners[currentDinerIdx]) {
+            nameInput.value = diners[currentDinerIdx].name || '';
+            nameInput.placeholder = 'Comensal ' + (currentDinerIdx + 1);
+        }
+    }
+
+    function addMesaDiner() {
+        if (!currentMesa) return;
+        const diners = currentMesa.diners || [];
+        diners.push({ id: diners.length + 1, name: '', items: [] });
+        db.collection('tables').doc(currentMesa.id).update({ diners, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+            .then(() => { currentMesa.diners = diners; currentDinerIdx = diners.length - 1; renderMesaDiners(); });
+    }
+
+    function renderCurrentDinerItems() {
+        const container = $('mesa-diner-items');
+        if (!container) return;
+        const diners = currentMesa.diners || [];
+        const diner = diners[currentDinerIdx];
+        if (!diner || !(diner.items || []).length) {
+            container.innerHTML = '<p class="pos-empty">Sin items aún. Toca un producto para agregar.</p>';
+            return;
+        }
+        container.innerHTML = diner.items.map((it, iIdx) => `
+            <div class="mesa-diner-item-line">
+                <span class="mesa-diner-item-name">${it.emoji || ''} ${it.name}${it.size ? ' (' + it.size + ')' : ''}</span>
+                <div class="mesa-diner-item-controls">
+                    <button class="mesa-qty-btn" data-item-idx="${iIdx}" data-action="minus">−</button>
+                    <span>${it.qty}</span>
+                    <button class="mesa-qty-btn" data-item-idx="${iIdx}" data-action="plus">+</button>
+                    <button class="mesa-remove-item-btn" data-item-idx="${iIdx}"><i class="fas fa-trash"></i></button>
+                </div>
+                <span class="mesa-diner-item-price">$${(it.price * it.qty).toFixed(2)}</span>
+            </div>`).join('');
+
+        container.querySelectorAll('.mesa-qty-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const iIdx = parseInt(btn.dataset.itemIdx);
+                const action = btn.dataset.action;
+                const diners = currentMesa.diners || [];
+                const diner = diners[currentDinerIdx];
+                if (!diner) return;
+                if (action === 'plus') diner.items[iIdx].qty++;
+                else diner.items[iIdx].qty = Math.max(1, diner.items[iIdx].qty - 1);
+                saveMesaDiners(diners);
+            });
+        });
+        container.querySelectorAll('.mesa-remove-item-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const iIdx = parseInt(btn.dataset.itemIdx);
+                const diners = currentMesa.diners || [];
+                const diner = diners[currentDinerIdx];
+                if (!diner) return;
+                diner.items.splice(iIdx, 1);
+                saveMesaDiners(diners);
+            });
+        });
+    }
+
+    function updateMesaDinerSubtotal() {
+        const el = $('mesa-diner-subtotal');
+        if (!el || !currentMesa) return;
+        const diners = currentMesa.diners || [];
+        const diner = diners[currentDinerIdx];
+        const subtotal = diner ? (diner.items || []).reduce((s, it) => s + it.price * it.qty, 0) : 0;
+        el.textContent = '$' + subtotal.toFixed(2);
+    }
+
+    function saveMesaDiners(diners) {
+        db.collection('tables').doc(currentMesa.id).update({
+            diners,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            currentMesa.diners = diners;
+            renderMesaDiners();
+            renderCurrentDinerItems();
+            updateMesaDinerSubtotal();
+            if (currentMesa.status === 'cuenta_pedida') renderMesaBill();
+        });
+    }
+
+    // ---- PRODUCTOS (reutiliza MENU_ITEMS) ----
+    function renderMesaProducts(catFilter) {
+        const catContainer = $('mesa-categories');
+        const grid = $('mesa-products-grid');
+        if (!catContainer || !grid) return;
+
+        const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
+        catContainer.innerHTML = `<button class="pos-cat-btn ${catFilter === 'all' ? 'active' : ''}" data-mesa-cat="all">Todos</button>` +
+            cats.map(k => `<button class="pos-cat-btn ${catFilter === k ? 'active' : ''}" data-mesa-cat="${k}"><i class="fas ${CATEGORIES[k].icon}"></i> ${CATEGORIES[k].name}</button>`).join('');
+
+        catContainer.querySelectorAll('.pos-cat-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                catContainer.querySelectorAll('.pos-cat-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderMesaProducts(btn.dataset.mesaCat);
+            });
+        });
+
+        const items = catFilter === 'all' ? MENU_ITEMS : MENU_ITEMS.filter(i => i.category === catFilter);
+        grid.innerHTML = items.map(item => {
+            const hasSizes = item.priceGrande != null && !item.onlyGrande;
+            return `
+            <div class="pos-product-card" data-mesa-product-id="${item.id}" data-has-sizes="${hasSizes}">
+                ${item.image ? `<img src="${item.image}" class="pos-product-img" alt="${item.name}">` : `<span class="pos-product-emoji">${item.emoji}</span>`}
+                <span class="pos-product-name">${item.name}</span>
+                <span class="pos-product-price">${hasSizes ? `M $${item.price.toFixed(2)} / G $${item.priceGrande.toFixed(2)}` : `$${item.price.toFixed(2)}`}</span>
+                ${hasSizes ? `
+                <div class="pos-size-picker hidden" data-mesa-product-id="${item.id}">
+                    <button class="pos-size-btn" data-size="M" data-price="${item.price}"><span class="size-label">M</span><span>$${item.price.toFixed(2)}</span></button>
+                    <button class="pos-size-btn" data-size="G" data-price="${item.priceGrande}"><span class="size-label">G</span><span>$${item.priceGrande.toFixed(2)}</span></button>
+                    <button class="pos-size-close"><i class="fas fa-times"></i></button>
+                </div>` : ''}
+            </div>`;
+        }).join('');
+
+        grid.querySelectorAll('.pos-product-card').forEach(card => {
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.pos-size-picker')) return;
+                if (!currentMesa || currentMesa.status === 'libre') { showToast('Abre la mesa primero', 'warning'); return; }
+                const productId = card.dataset.mesaProductId;
+                const hasSizes = card.dataset.hasSizes === 'true';
+                if (hasSizes) {
+                    grid.querySelectorAll('.pos-size-picker').forEach(p => p.classList.add('hidden'));
+                    const picker = card.querySelector('.pos-size-picker');
+                    if (picker) picker.classList.remove('hidden');
+                } else {
+                    const item = MENU_ITEMS.find(i => String(i.id) === String(productId));
+                    if (item) addItemToCurrentDiner(item, null, item.price);
+                }
+            });
+        });
+
+        grid.querySelectorAll('.pos-size-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const picker = btn.closest('.pos-size-picker');
+                const productId = picker.dataset.mesaProductId;
+                const item = MENU_ITEMS.find(i => String(i.id) === String(productId));
+                if (item) addItemToCurrentDiner(item, btn.dataset.size, parseFloat(btn.dataset.price));
+                picker.classList.add('hidden');
+            });
+        });
+
+        grid.querySelectorAll('.pos-size-close').forEach(btn => {
+            btn.addEventListener('click', (e) => { e.stopPropagation(); btn.closest('.pos-size-picker').classList.add('hidden'); });
+        });
+    }
+
+    function addItemToCurrentDiner(menuItem, size, price) {
+        if (!currentMesa) return;
+        const diners = currentMesa.diners || [];
+        if (!diners[currentDinerIdx]) { showToast('Selecciona un comensal', 'warning'); return; }
+        const diner = diners[currentDinerIdx];
+        diner.items = diner.items || [];
+        // Check if same item+size already exists → increase qty
+        const existing = diner.items.find(it => String(it.productId) === String(menuItem.id) && it.size === (size || ''));
+        if (existing) {
+            existing.qty++;
+        } else {
+            diner.items.push({
+                productId: menuItem.id,
+                name: menuItem.name,
+                emoji: menuItem.emoji || '',
+                size: size || '',
+                price,
+                qty: 1
+            });
+        }
+        saveMesaDiners(diners);
+        showToast(`${menuItem.name} → ${diners[currentDinerIdx].name || 'Comensal ' + (currentDinerIdx + 1)}`, 'success');
+    }
+
+    // ---- CUENTA DE LA MESA ----
+    function renderMesaBill() {
+        const container = $('mesa-bill-diners');
+        if (!container || !currentMesa) return;
+        const diners = currentMesa.diners || [];
+        let mesaTotal = 0;
+        container.innerHTML = diners.map((d, idx) => {
+            const dTotal = (d.items || []).reduce((s, it) => s + it.price * it.qty, 0);
+            mesaTotal += dTotal;
+            return `
+            <div class="mesa-bill-diner-card">
+                <div class="mesa-bill-diner-header">
+                    <span>${d.name || 'Comensal ' + (idx + 1)}</span>
+                    <span>$${dTotal.toFixed(2)}</span>
+                </div>
+                <div class="mesa-bill-diner-items">${(d.items || []).map(it => `${it.emoji} ${it.name}${it.size ? ' (' + it.size + ')' : ''} x${it.qty} — $${(it.price * it.qty).toFixed(2)}`).join('<br>')}</div>
+                ${dTotal > 0 ? `<button class="mesa-pay-diner-btn" data-diner-idx="${idx}"><i class="fas fa-cash-register"></i> Cobrar este comensal ($${dTotal.toFixed(2)})</button>` : ''}
+            </div>`;
+        }).join('');
+
+        const totalEl = $('mesa-bill-total');
+        if (totalEl) totalEl.textContent = '$' + mesaTotal.toFixed(2);
+
+        container.querySelectorAll('.mesa-pay-diner-btn').forEach(btn => {
+            btn.addEventListener('click', () => openMesaPayModal(parseInt(btn.dataset.dinerIdx)));
+        });
+    }
+
+    // ---- PAGO ----
+    function openMesaPayModal(dinerIdx) {
+        mesaPayDinerIdx = typeof dinerIdx === 'number' ? dinerIdx : null;
+        mesaPayTip = 0;
+        mesaPayMethod = 'efectivo';
+
+        const diners = currentMesa.diners || [];
+        let payingItems = [];
+        let payTitle = '';
+        if (mesaPayDinerIdx !== null) {
+            const d = diners[mesaPayDinerIdx];
+            payingItems = d ? (d.items || []) : [];
+            payTitle = d ? (d.name || 'Comensal ' + (mesaPayDinerIdx + 1)) : '';
+        } else {
+            diners.forEach(d => payingItems.push(...(d.items || [])));
+            payTitle = 'Mesa completa';
+        }
+
+        const subtotal = payingItems.reduce((s, it) => s + it.price * it.qty, 0);
+        $('mesa-pay-title').textContent = '— ' + payTitle;
+        $('mesa-pay-summary').innerHTML = `<div class="mesa-pay-summary-items">${payingItems.map(it => `<span>${it.emoji} ${it.name}${it.size ? '(' + it.size + ')' : ''} x${it.qty}</span><span>$${(it.price * it.qty).toFixed(2)}</span>`).join('')}</div><div class="mesa-pay-sub"><span>Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>`;
+        updateMesaPayTotal();
+
+        document.querySelectorAll('.mesa-method-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector('.mesa-method-btn[data-method="efectivo"]').classList.add('active');
+        document.querySelectorAll('.mesa-tip-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector('.mesa-tip-btn[data-tip="0"]').classList.add('active');
+
+        $('mesa-pay-modal').classList.remove('hidden');
+    }
+
+    function updateMesaPayTotal() {
+        const diners = currentMesa ? (currentMesa.diners || []) : [];
+        let payingItems = [];
+        if (mesaPayDinerIdx !== null) {
+            const d = diners[mesaPayDinerIdx];
+            payingItems = d ? (d.items || []) : [];
+        } else {
+            diners.forEach(d => payingItems.push(...(d.items || [])));
+        }
+        const subtotal = payingItems.reduce((s, it) => s + it.price * it.qty, 0);
+        const total = subtotal + mesaPayTip;
+        const el = $('mesa-pay-total');
+        if (el) el.textContent = '$' + total.toFixed(2);
+    }
+
+    function processMesaPayment() {
+        const diners = currentMesa ? (currentMesa.diners || []) : [];
+        let payingItems = [];
+        if (mesaPayDinerIdx !== null) {
+            const d = diners[mesaPayDinerIdx];
+            payingItems = d ? (d.items || []) : [];
+        } else {
+            diners.forEach(d => payingItems.push(...(d.items || [])));
+        }
+        if (!payingItems.length) { showToast('No hay items para cobrar', 'warning'); return; }
+
+        const subtotal = payingItems.reduce((s, it) => s + it.price * it.qty, 0);
+        const total = subtotal + mesaPayTip;
+
+        const sale = {
+            items: payingItems.map(it => ({ name: it.name, emoji: it.emoji, qty: it.qty, price: it.price, size: it.size || '', total: it.price * it.qty })),
+            subtotal,
+            discount: 0,
+            discountAmount: 0,
+            tip: mesaPayTip,
+            total,
+            paymentMethod: mesaPayMethod,
+            paymentDetails: {},
+            source: 'mesa',
+            tableNumber: currentMesa.tableNumber,
+            tableName: currentMesa.tableName || 'Mesa ' + currentMesa.tableNumber,
+            customerName: mesaPayDinerIdx !== null ? (diners[mesaPayDinerIdx] ? diners[mesaPayDinerIdx].name || '' : '') : diners.map(d => d.name || '').filter(n => n).join(', '),
+            deviceType: detectDeviceType(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            date: new Date().toLocaleDateString('es-PA')
+        };
+
+        db.collection('sales').add(sale).then(() => {
+            showToast(`Pago registrado: $${total.toFixed(2)}`, 'success');
+            playCashRegisterSound();
+            $('mesa-pay-modal').classList.add('hidden');
+
+            // Limpiar items pagados
+            if (mesaPayDinerIdx !== null) {
+                diners[mesaPayDinerIdx].items = [];
+                saveMesaDiners(diners);
+                // Si todos los comensales pagaron, cerrar mesa
+                const allEmpty = diners.every(d => !(d.items || []).length);
+                if (allEmpty) closeMesa();
+            } else {
+                // Cobrar mesa completa → cerrar
+                closeMesa();
+            }
+        }).catch(() => showToast('Error registrando pago', 'warning'));
+    }
+
+    // ---- ESTADO DE MESA ----
+    function openMesa() {
+        if (!currentMesa) return;
+        const maxDiners = currentMesa.maxDiners || 4;
+        const diners = [];
+        for (let i = 0; i < maxDiners; i++) {
+            diners.push({ id: i + 1, name: '', items: [] });
+        }
+        db.collection('tables').doc(currentMesa.id).update({
+            status: 'ocupada',
+            diners,
+            openedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            sessionId: Date.now().toString(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            currentMesa.status = 'ocupada';
+            currentMesa.diners = diners;
+            currentDinerIdx = 0;
+            refreshMesaDetail();
+            showToast('Mesa abierta', 'success');
+        });
+    }
+
+    function requestMesaBill() {
+        if (!currentMesa) return;
+        db.collection('tables').doc(currentMesa.id).update({
+            status: 'cuenta_pedida',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            currentMesa.status = 'cuenta_pedida';
+            refreshMesaDetail();
+            showToast('Cuenta solicitada', 'info');
+        });
+    }
+
+    function closeMesa() {
+        if (!currentMesa) return;
+        db.collection('tables').doc(currentMesa.id).update({
+            status: 'libre',
+            diners: [],
+            openedAt: null,
+            sessionId: '',
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            showToast('Mesa cerrada ✓', 'success');
+            backToMesasMap();
+        });
+    }
+
+    function backToMesasMap() {
+        currentMesa = null;
+        $('mesa-detail').classList.add('hidden');
+        $('mesas-map-view').classList.remove('hidden');
+    }
+
+    // ---- DINER COUNT (cuando mesa está libre) ----
+    function updateMesaDinerCount(delta) {
+        if (!currentMesa || currentMesa.status !== 'libre') return;
+        const newCount = Math.max(1, Math.min(20, (currentMesa.maxDiners || 4) + delta));
+        db.collection('tables').doc(currentMesa.id).update({
+            maxDiners: newCount,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            currentMesa.maxDiners = newCount;
+            $('mesa-diner-count-display').textContent = newCount;
+        });
+    }
+
+    function addMesaTable() {
+        const nextNum = mesasData.length > 0 ? Math.max(...mesasData.map(m => m.tableNumber || 0)) + 1 : 1;
+        db.collection('tables').add({
+            tableNumber: nextNum,
+            tableName: 'Mesa ' + nextNum,
+            maxDiners: 4,
+            status: 'libre',
+            diners: [],
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            openedAt: null,
+            sessionId: ''
+        }).then(() => showToast('Mesa ' + nextNum + ' agregada', 'success'));
+    }
+
+    // ---- BIND EVENTOS DETALLE (solo una vez) ----
+    let mesaDetailEventsBound = false;
+    function bindMesaDetailEvents() {
+        if (mesaDetailEventsBound) return;
+        mesaDetailEventsBound = true;
+
+        // Back button
+        const backBtn = $('mesa-back-btn');
+        if (backBtn) backBtn.addEventListener('click', backToMesasMap);
+
+        // Open table
+        const openBtn = $('mesa-open-btn');
+        if (openBtn) openBtn.addEventListener('click', openMesa);
+
+        // Request bill
+        const billBtn = $('mesa-request-bill-btn');
+        if (billBtn) billBtn.addEventListener('click', requestMesaBill);
+
+        // Close table
+        const closeBtn = $('mesa-close-btn');
+        if (closeBtn) closeBtn.addEventListener('click', () => { if (confirm('¿Cerrar la mesa sin cobrar?')) closeMesa(); });
+
+        // Pay all button
+        const payAllBtn = $('mesa-bill-pay-all');
+        if (payAllBtn) payAllBtn.addEventListener('click', () => openMesaPayModal(null));
+
+        // Add table button (in map view)
+        const addTableBtn = $('mesas-add-table');
+        if (addTableBtn) addTableBtn.addEventListener('click', addMesaTable);
+
+        // Diner count controls
+        const minusBtn = $('mesa-diner-minus');
+        const plusBtn = $('mesa-diner-plus');
+        if (minusBtn) minusBtn.addEventListener('click', () => updateMesaDinerCount(-1));
+        if (plusBtn) plusBtn.addEventListener('click', () => updateMesaDinerCount(1));
+
+        // Save diner name
+        const saveNameBtn = $('mesa-save-name-btn');
+        const nameInput = $('mesa-diner-name-input');
+        if (saveNameBtn && nameInput) {
+            saveNameBtn.addEventListener('click', () => {
+                const diners = currentMesa ? (currentMesa.diners || []) : [];
+                if (!diners[currentDinerIdx]) return;
+                diners[currentDinerIdx].name = nameInput.value.trim();
+                saveMesaDiners(diners);
+                showToast('Nombre guardado', 'success');
+            });
+            nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveNameBtn.click(); });
+        }
+
+        // Payment modal events
+        const payClose = $('mesa-pay-close');
+        if (payClose) payClose.addEventListener('click', () => $('mesa-pay-modal').classList.add('hidden'));
+        const payModal = $('mesa-pay-modal');
+        if (payModal) payModal.addEventListener('click', (e) => { if (e.target === payModal) payModal.classList.add('hidden'); });
+
+        document.querySelectorAll('.mesa-method-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mesa-method-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                mesaPayMethod = btn.dataset.method;
+            });
+        });
+
+        document.querySelectorAll('.mesa-tip-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mesa-tip-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                mesaPayTip = parseFloat(btn.dataset.tip) || 0;
+                updateMesaPayTotal();
+            });
+        });
+
+        const confirmPayBtn = $('mesa-confirm-pay');
+        if (confirmPayBtn) confirmPayBtn.addEventListener('click', processMesaPayment);
     }
 
     // ========================================
