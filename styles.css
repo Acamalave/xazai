@@ -678,7 +678,8 @@ body {
 
 .size-btn {
     flex: 1;
-    padding: 10px 14px;
+    min-width: 0;
+    padding: 10px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--bg-card);
@@ -690,7 +691,9 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 6px;
+    overflow: hidden;
 }
 
 .size-btn:hover { border-color: var(--primary-light); }
@@ -713,6 +716,7 @@ body {
 .size-btn span:nth-child(2) {
     font-size: 13px;
     font-weight: 500;
+    white-space: nowrap;
 }
 
 .size-price {
@@ -3423,10 +3427,12 @@ body {
     .admin-logout-btn {
         border-top: none;
         border-left: 1px solid var(--border);
-        padding: 10px 14px;
+        padding: 8px 14px;
         font-size: 12px;
+        gap: 6px;
+        white-space: nowrap;
     }
-    .admin-logout-btn span { display: none; }
+    .admin-logout-btn span { display: inline; }
     .admin-main { padding: 16px; }
     .pos-layout {
         grid-template-columns: 1fr;
@@ -4953,6 +4959,10 @@ body {
 
     .toppings-grid-compact { grid-template-columns: repeat(2, 1fr); }
     .size-options { flex-direction: row; gap: 8px; }
+    .size-btn { padding: 8px 6px; gap: 4px; }
+    .size-btn span:nth-child(2) { font-size: 12px; }
+    .size-price { font-size: 12px !important; }
+    .size-icon { font-size: 14px; }
 
     .floating-checkout {
         left: 12px;
@@ -6591,5 +6601,8 @@ body {
     color: #ff4757;
     font-weight: 700;
     display: block;
-    margin-top: 1px;
+    width: 100%;          /* ocupa toda la fila del flex-wrap → queda debajo del texto */
+    text-align: center;
+    margin-top: 0;
+    line-height: 1.2;
 }
