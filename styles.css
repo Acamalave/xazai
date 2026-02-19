@@ -6538,3 +6538,58 @@ body {
     .mesa-detail-header { gap: 8px; }
     .mesa-action-btn { padding: 12px 16px; font-size: 12px; }
 }
+
+/* ── Inventory per-size toggles ── */
+.inventory-size-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-right: 8px;
+}
+.inv-size-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-light);
+}
+.toggle-switch.toggle-sm {
+    transform: scale(0.75);
+    transform-origin: right center;
+}
+
+/* Inventory dual prices */
+.inventory-prices {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-right: 8px;
+}
+.inv-price-tag {
+    font-size: 11px;
+    color: var(--text-light);
+    white-space: nowrap;
+}
+.inv-price-tag.main {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+/* Disabled size button in ordering */
+.size-btn.disabled-size {
+    opacity: 0.4;
+    cursor: not-allowed;
+    border-style: dashed;
+    pointer-events: none;
+}
+.size-btn.disabled-size:hover {
+    transform: none;
+}
+.size-agotado {
+    font-size: 9px;
+    color: #ff4757;
+    font-weight: 700;
+    display: block;
+    margin-top: 1px;
+}

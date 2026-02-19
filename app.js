@@ -1180,15 +1180,21 @@ document.addEventListener('DOMContentLoaded', function() {
         // Size section: only show if not onlyGrande
         let sizeSection = '';
         if (!isOnlyGrande && product.priceGrande) {
+            const invData = inventoryCache[String(product.id)];
+            const isMActive = invData ? invData.activeM !== false : true;
+            const isGActive = invData ? invData.activeG !== false : true;
+            // Auto-select: if M is disabled but G is active, pre-select G
+            const mClass = `size-btn${isMActive ? ' active' : ' disabled-size'}`;
+            const gClass = `size-btn${!isMActive && isGActive ? ' active' : ''}${!isGActive ? ' disabled-size' : ''}`;
             sizeSection = `
                 <div class="expand-section">
                     <h4><i class="fas fa-ruler"></i> Tamaño</h4>
                     <div class="size-options">
-                        <button class="size-btn active" data-size="mediano" data-price="${product.price}">
-                            <span class="size-icon">M</span><span>Mediano</span><span class="size-price">$${product.price.toFixed(2)}</span>
+                        <button class="${mClass}" data-size="mediano" data-price="${product.price}" ${!isMActive ? 'disabled' : ''}>
+                            <span class="size-icon">M</span><span>Mediano</span><span class="size-price">$${product.price.toFixed(2)}</span>${!isMActive ? '<span class="size-agotado">Agotado</span>' : ''}
                         </button>
-                        <button class="size-btn" data-size="grande" data-price="${product.priceGrande}">
-                            <span class="size-icon">G</span><span>Grande</span><span class="size-price">$${product.priceGrande.toFixed(2)}</span>
+                        <button class="${gClass}" data-size="grande" data-price="${product.priceGrande}" ${!isGActive ? 'disabled' : ''}>
+                            <span class="size-icon">G</span><span>Grande</span><span class="size-price">$${product.priceGrande.toFixed(2)}</span>${!isGActive ? '<span class="size-agotado">Agotado</span>' : ''}
                         </button>
                     </div>
                 </div>`;
@@ -1267,7 +1273,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     <div class="expand-total">
                         <span class="expand-total-label">Total</span>
-                        <span class="expand-total-price">$${product.price.toFixed(2)}</span>
+                        <span class="expand-total-price">$${((() => { const _inv = inventoryCache[String(product.id)]; const _mOk = (!product.onlyGrande && product.priceGrande) ? (_inv ? _inv.activeM !== false : true) : true; return (!product.onlyGrande && product.priceGrande && !_mOk) ? product.priceGrande : product.price; })()).toFixed(2)}</span>
                     </div>
                     <button class="btn-add-expand">
                         <i class="fas fa-cart-plus"></i> Agregar
@@ -1280,8 +1286,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function bindExpandEvents(expandEl, product) {
         const isOnlyGrande = product.onlyGrande;
         const isSmoothie = product.category === 'smoothies';
-        let size = isOnlyGrande ? 'único' : 'mediano';
-        let currentPrice = product.price;
+        // Check size availability from inventory cache
+        const _invBind = inventoryCache[String(product.id)];
+        const _isMActiveBind = !isOnlyGrande && product.priceGrande ? (_invBind ? _invBind.activeM !== false : true) : true;
+        const _defaultSizeIsGrande = !isOnlyGrande && product.priceGrande && !_isMActiveBind;
+        let size = isOnlyGrande ? 'único' : (_defaultSizeIsGrande ? 'grande' : 'mediano');
+        let currentPrice = _defaultSizeIsGrande ? product.priceGrande : product.price;
         let qty = 1, selectedToppings = [];
         let proteinChoice = 'none', milkChoice = '';
         let proteinPrice = 0;
@@ -1299,6 +1309,7 @@ document.addEventListener('DOMContentLoaded', function() {
         expandEl.querySelectorAll('.size-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (btn.disabled) return; // Ignore disabled size buttons
                 expandEl.querySelectorAll('.size-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 size = btn.dataset.size;
@@ -2808,12 +2819,43 @@ document.addEventListener('DOMContentLoaded', function() {
         const container = $('inventory-list');
         // Filtrar por tamaño según selección
         let filteredItems = MENU_ITEMS;
+        if (sizeFilter === 'medio') filteredItems = MENU_ITEMS.filter(i => !i.priceGrande && !i.onlyGrande);
         if (sizeFilter === 'both') filteredItems = MENU_ITEMS.filter(i => i.priceGrande && !i.onlyGrande);
         if (sizeFilter === 'grande') filteredItems = MENU_ITEMS.filter(i => i.onlyGrande);
         container.innerHTML = filteredItems.map(item => {
             const inv = inventoryCache[String(item.id)];
             const isActive = inv ? inv.active !== false : true;
             const qty = inv && inv.qty !== undefined ? inv.qty : '';
+            const isDualSize = item.priceGrande && !item.onlyGrande;
+            const invM = isDualSize ? (inv ? inv.activeM !== false : true) : true;
+            const invG = isDualSize ? (inv ? inv.activeG !== false : true) : true;
+
+            const priceDisplay = isDualSize
+                ? `<div class="inventory-prices">
+                        <span class="inv-price-tag">M $${item.price.toFixed(2)}</span>
+                        <span class="inv-price-tag">G $${item.priceGrande.toFixed(2)}</span>
+                   </div>`
+                : `<span class="inventory-price">$${item.price.toFixed(2)}</span>`;
+
+            const sizeToggles = isDualSize
+                ? `<div class="inventory-size-toggles">
+                        <div class="inv-size-toggle-row">
+                            <span>M</span>
+                            <label class="toggle-switch toggle-sm">
+                                <input type="checkbox" data-product-id="${item.id}" data-size="M" ${invM ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="inv-size-toggle-row">
+                            <span>G</span>
+                            <label class="toggle-switch toggle-sm">
+                                <input type="checkbox" data-product-id="${item.id}" data-size="G" ${invG ? 'checked' : ''}>
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                   </div>`
+                : '';
+
             return `
             <div class="inventory-item ${!isActive ? 'inactive' : ''}">
                 ${item.image ? `<img src="${item.image}" class="inventory-img" alt="${item.name}">` : `<span class="inventory-emoji">${item.emoji}</span>`}
@@ -2821,7 +2863,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="inventory-name">${item.name}</div>
                     <div class="inventory-cat">${item.category}</div>
                 </div>
-                <span class="inventory-price">$${item.price.toFixed(2)}</span>
+                ${priceDisplay}
+                ${sizeToggles}
                 <label class="toggle-switch">
                     <input type="checkbox" data-product-id="${item.id}" ${isActive ? 'checked' : ''}>
                     <span class="toggle-slider"></span>
@@ -2829,8 +2872,26 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>`;
         }).join('');
 
-        // Bind toggle events
-        container.querySelectorAll('.toggle-switch input').forEach(toggle => {
+        // Bind size toggle events (M / G)
+        container.querySelectorAll('.toggle-switch input[data-size]').forEach(toggle => {
+            toggle.addEventListener('change', () => {
+                const productId = toggle.dataset.productId;
+                const size = toggle.dataset.size;
+                const field = size === 'M' ? 'activeM' : 'activeG';
+                const val = toggle.checked;
+                db.collection('inventory').doc(productId).set({ [field]: val }, { merge: true })
+                    .then(() => {
+                        if (!inventoryCache[productId]) inventoryCache[productId] = {};
+                        inventoryCache[productId][field] = val;
+                        const name = MENU_ITEMS.find(i => i.id == productId)?.name;
+                        showToast(`${name} talla ${size}: ${val ? 'Activo' : 'Inactivo'}`, val ? 'success' : 'warning');
+                    })
+                    .catch(err => showToast('Error actualizando inventario', 'warning'));
+            });
+        });
+
+        // Bind main toggle events
+        container.querySelectorAll('.toggle-switch input:not([data-size])').forEach(toggle => {
             toggle.addEventListener('change', () => {
                 const productId = toggle.dataset.productId;
                 const active = toggle.checked;
