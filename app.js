@@ -2497,14 +2497,7 @@ document.addEventListener('DOMContentLoaded', function() {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }).then((docRef) => {
             console.log(`Order ${orderId} saved to Firestore (awaiting payment)`);
-            // DO NOT decrement inventory here — wait until payment is confirmed
-            // Upsert customer record
-            const custPhone = currentUser ? (currentUser.phone || '') : '';
-            const custName = currentUser ? (currentUser.name || 'Invitado') : 'Invitado';
-            const orderTotal = total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + (currentTip || 0));
-            if (custPhone) {
-                upsertCustomer(custPhone, custName, orderTotal, 'online', address || '');
-            }
+            // DO NOT decrement inventory or upsert customer here — wait until payment is confirmed
         }).catch(err => {
             console.error('Error saving order:', err);
         });
@@ -2524,6 +2517,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 // NOW decrement inventory since payment is confirmed
                 const items = order.items || [];
                 decrementInventoryOnSale(items.map(i => ({ name: i.name, productId: i.productId, qty: i.quantity || 1 })));
+                // Track customer AFTER payment confirmed
+                upsertCustomer(order.customerPhone, order.customerName, order.total || 0, 'online', order.address || '');
             });
         }).catch(err => console.error('Error updating payment status:', err));
     }
@@ -2614,7 +2609,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeof db !== 'undefined') {
             db.collection('orders').add(orderData).then(() => {
                 // FIX #6: Decrement inventory and track customer for direct/cash orders too
-                decrementInventoryOnSale(orderData.items.map(i => ({ name: i.name, qty: i.quantity || 1 })));
+                decrementInventoryOnSale(orderData.items.map(i => ({ productId: i.productId, name: i.name, qty: i.quantity || 1 })));
                 const custPhone = currentUser ? (currentUser.phone || '') : '';
                 const custName = currentUser ? (currentUser.name || 'Invitado') : 'Invitado';
                 if (custPhone) {
@@ -2991,6 +2986,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Don't duplicate if already converted
             if (order.convertedToSale) return;
             const items = (order.items || []).map(i => ({
+                productId: i.productId || null,
                 name: i.name || '', emoji: i.emoji || '', qty: i.quantity || i.qty || 1,
                 price: i.price || 0, size: i.size || '',
                 total: i.total || (i.price || 0) * (i.quantity || i.qty || 1)
@@ -3042,7 +3038,14 @@ document.addEventListener('DOMContentLoaded', function() {
             let hasUpdates = false;
             items.forEach(item => {
                 const qty = item.quantity || item.qty || 1;
-                const product = getMenuItems().find(p => p.name === item.name);
+                // Match by productId first, then fall back to name
+                let product = null;
+                if (item.productId) {
+                    product = getMenuItems().find(p => String(p.id) === String(item.productId));
+                }
+                if (!product) {
+                    product = getMenuItems().find(p => p.name === item.name);
+                }
                 if (!product) return;
                 const invRef = db.collection('inventory').doc(String(product.id));
                 const cached = inventoryCache[String(product.id)];
@@ -5502,7 +5505,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let factInvoices = [];
     let factCurrentRange = 'today';
 
+    let _facturacionInitialized = false;
     function initFacturacion() {
+        if (_facturacionInitialized) { loadFacturas(factCurrentRange || 'today'); return; }
+        _facturacionInitialized = true;
         // Set default dates
         const today = new Date();
         const fromInput = $('fact-date-from');
