@@ -2598,12 +2598,14 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast('Selecciona tu ubicación de entrega en el mapa', 'error');
             const mapEl = $('map-container');
             if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth' });
+            _orderDirectProcessing = false;
             return;
         }
         const deliveryAddress = $('delivery-address') ? $('delivery-address').value.trim() : '';
         if (!deliveryAddress) {
             showToast('Por favor ingresa tu dirección de entrega', 'error');
             if ($('delivery-address')) $('delivery-address').focus();
+            _orderDirectProcessing = false;
             return;
         }
         orderCounter++;
@@ -4065,6 +4067,11 @@ document.addEventListener('DOMContentLoaded', function() {
             posTipAmount = 0;
             posDiscountPercent = 0;
             posDeliveryAmount = 0;
+            // Reset payment method to efectivo for next sale
+            posPaymentMethod = 'efectivo';
+            document.querySelectorAll('.pos-method-btn').forEach(b => b.classList.remove('active'));
+            const defMethodBtn = document.querySelector('.pos-method-btn[data-method="efectivo"]');
+            if (defMethodBtn) defMethodBtn.classList.add('active');
             document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
             document.querySelector('.pos-tip-btn[data-tip="0"]').classList.add('active');
             $('pos-tip-custom').classList.add('hidden');
@@ -5660,6 +5667,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: d.paymentMethod || 'efectivo',
                     paymentDetails: d.paymentDetails || {},
                     status: d.status || 'pendiente',
+                    inventoryDecremented: d.inventoryDecremented || false,
                     voided: d.voided || false,
                     voidReason: d.voidReason || '',
                     voidedAt: d.voidedAt ? d.voidedAt.toDate() : null,
@@ -5876,8 +5884,10 @@ document.addEventListener('DOMContentLoaded', function() {
             inv.voidReason = reason;
             inv.voidedAt = new Date();
             // Restore inventory for voided items
+            // For orders: only restore if inventory was actually decremented
+            const shouldRestore = inv.type === 'sale' || (inv.type === 'order' && inv.inventoryDecremented);
             const items = inv.items || [];
-            if (items.length > 0) {
+            if (shouldRestore && items.length > 0) {
                 const batch = db.batch();
                 let hasUpdates = false;
                 items.forEach(item => {
