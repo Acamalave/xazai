@@ -446,6 +446,11 @@ document.addEventListener('DOMContentLoaded', function() {
     renderCategory('inicio');
     updateCartUI();
 
+    // Start menu listener early so customers get Firestore-managed prices/products
+    if (typeof db !== 'undefined' && !menuUnsubscribe) {
+        startMenuListener();
+    }
+
     // Sync orderCounter with Firestore (get latest order number)
     if (typeof db !== 'undefined') {
         db.collection('orders').orderBy('createdAt', 'desc').limit(1).get().then(snap => {
@@ -1478,7 +1483,10 @@ document.addEventListener('DOMContentLoaded', function() {
             </button>
         `).join('');
 
-        container.addEventListener('click', (e) => {
+        // Remove old listener before adding new one to prevent duplicates
+        const newContainer = container.cloneNode(true);
+        container.parentNode.replaceChild(newContainer, container);
+        newContainer.addEventListener('click', (e) => {
             const btn = e.target.closest('.build-option');
             if (!btn) return;
             const { id, price, name } = btn.dataset;
@@ -2392,8 +2400,13 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log("Yappy pago exitoso:", event.detail);
             const orderId = yappyCurrentOrderId || `XZ-${orderCounter}`;
 
-            // Clear cart
+            // Clear cart and reset session state
             cart = [];
+            scheduledSlot = null;
+            currentTip = 0;
+            currentDeliveryFee = 0;
+            deliveryDistanceKm = 0;
+            mapMarker = null;
             updateCartUI();
             localStorage.removeItem('xazai_pending_order');
 
@@ -2404,8 +2417,8 @@ document.addEventListener('DOMContentLoaded', function() {
             confirmationOverlay.classList.remove('hidden');
             showToast('¡Pago confirmado con Yappy!', 'success');
 
-            // Update Firestore: mark as paid
-            updateOrderPaymentStatus(orderId, 'pendiente', true);
+            // Update Firestore: mark as paid + decrement inventory NOW that payment is confirmed
+            updateOrderPaymentStatusAndDecrement(orderId);
             btnYappy.isButtonLoading = false;
         });
 
@@ -2417,6 +2430,8 @@ document.addEventListener('DOMContentLoaded', function() {
             $('yappy-error-msg').textContent = 'El pago no se completó. Intenta de nuevo.';
             showToast('El pago no se completó. Intenta de nuevo.', 'warning');
             btnYappy.isButtonLoading = false;
+            // Cancel the orphaned order to prevent ghost orders
+            cancelOrphanedYappyOrder(yappyCurrentOrderId);
         });
 
         console.log('Yappy V2 web component initialized');
@@ -2447,12 +2462,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const sanitizedItems = cart.map(i => ({
             name: i.name || '',
             quantity: i.quantity || 1,
-            price: i.price || 0,
+            price: i.basePrice || i.price || 0,
             total: i.total || 0,
             emoji: i.emoji || '',
             size: i.size || '',
             toppings: i.toppings || [],
-            note: i.note || ''
+            note: i.note || '',
+            productId: i.productId || null
         }));
         // Clean scheduledSlot — Firestore rejects undefined values
         const cleanSlot = scheduledSlot ? {
@@ -2476,12 +2492,12 @@ document.addEventListener('DOMContentLoaded', function() {
             address: address || '',
             scheduledSlot: cleanSlot,
             deviceType: detectDeviceType(),
-            inventoryDecremented: true,
+            date: new Date().toLocaleDateString('es-PA'),
+            inventoryDecremented: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }).then((docRef) => {
-            console.log(`Order ${orderId} saved to Firestore`);
-            // Auto-decrement inventory for online orders
-            decrementInventoryOnSale(sanitizedItems.map(i => ({ name: i.name, qty: i.quantity || 1 })));
+            console.log(`Order ${orderId} saved to Firestore (awaiting payment)`);
+            // DO NOT decrement inventory here — wait until payment is confirmed
             // Upsert customer record
             const custPhone = currentUser ? (currentUser.phone || '') : '';
             const custName = currentUser ? (currentUser.name || 'Invitado') : 'Invitado';
@@ -2494,17 +2510,31 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function updateOrderPaymentStatus(orderId, status, paymentConfirmed) {
+    function updateOrderPaymentStatusAndDecrement(orderId) {
         if (typeof db === 'undefined') return;
         db.collection('orders').where('number', '==', orderId).get().then(snap => {
             snap.forEach(doc => {
+                const order = doc.data();
                 doc.ref.update({
-                    status: status,
-                    paymentConfirmed: paymentConfirmed,
-                    paymentDate: new Date()
+                    status: 'pendiente',
+                    paymentConfirmed: true,
+                    paymentDate: new Date(),
+                    inventoryDecremented: true
                 });
+                // NOW decrement inventory since payment is confirmed
+                const items = order.items || [];
+                decrementInventoryOnSale(items.map(i => ({ name: i.name, productId: i.productId, qty: i.quantity || 1 })));
             });
         }).catch(err => console.error('Error updating payment status:', err));
+    }
+
+    function cancelOrphanedYappyOrder(orderId) {
+        if (typeof db === 'undefined' || !orderId) return;
+        db.collection('orders').where('number', '==', orderId).get().then(snap => {
+            snap.forEach(doc => {
+                doc.ref.update({ status: 'cancelado', cancelReason: 'Pago Yappy fallido/abandonado' });
+            });
+        }).catch(err => console.error('Error cancelling orphaned Yappy order:', err));
     }
 
     // Initialize Yappy: wait for custom element registration (up to 15s for slow mobile)
@@ -2567,12 +2597,13 @@ document.addEventListener('DOMContentLoaded', function() {
             number: orderNum,
             customerName: currentUser ? currentUser.name : 'Invitado',
             customerPhone: currentUser ? (currentUser.phone || '') : '',
-            items: cart.map(i => ({ name: i.name, emoji: i.emoji, size: i.size, quantity: i.quantity, price: i.basePrice || i.price || 0, toppings: i.toppings, total: i.total })),
+            items: cart.map(i => ({ productId: i.productId || null, name: i.name, emoji: i.emoji, size: i.size, quantity: i.quantity, price: i.basePrice || i.price || 0, toppings: i.toppings || [], note: i.note || '', total: i.total })),
             subtotal, delivery: deliveryFee, deliveryDistance: deliveryDistanceKm, tip: currentTip,
             total: subtotal + deliveryFee + currentTip,
             address: deliveryAddress,
             paymentMethod: 'efectivo',
-            scheduled: scheduledSlot ? `${scheduledSlot.label} ${scheduledSlot.time}` : null,
+            scheduledSlot: scheduledSlot ? { value: scheduledSlot.value || '', label: scheduledSlot.label || '', time: scheduledSlot.time || '' } : null,
+            date: new Date().toLocaleDateString('es-PA'),
             status: 'pendiente',
             deviceType: detectDeviceType(),
             inventoryDecremented: true,
@@ -2599,6 +2630,9 @@ document.addEventListener('DOMContentLoaded', function() {
         cart = [];
         scheduledSlot = null;
         currentTip = 0;
+        currentDeliveryFee = 0;
+        deliveryDistanceKm = 0;
+        mapMarker = null;
         updateCartUI();
         closePaymentModal();
         if (!cartSidebar.classList.contains('hidden')) toggleCart();
@@ -2850,7 +2884,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const canCancel = (status) => !['entregado', 'cancelado', 'en_camino'].includes(status);
 
         const adminStatusLabels = {
-            pendiente: 'Pendiente', preparando: 'Preparando', listo: 'Listo',
+            esperando_pago: '⏳ Esperando Pago', pendiente: 'Pendiente', preparando: 'Preparando', listo: 'Listo',
             en_camino: 'En Camino', entregado: 'Entregado', cancelado: 'Cancelado'
         };
 
@@ -2878,6 +2912,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 ${order.status === 'cancelado' && order.cancelReason ? `<div class="order-cancel-reason"><i class="fas fa-ban"></i> ${order.cancelReason}</div>` : ''}
                 <div class="order-actions">
+                    ${order.status === 'esperando_pago' ? `<span style="color:#ff6b6b;font-size:12px"><i class="fas fa-clock"></i> Pago Yappy no confirmado</span>` : ''}
                     ${order.status === 'pendiente' ? `<button class="order-action-btn btn-preparando" data-order-id="${order.id}">Preparando</button>` : ''}
                     ${order.status === 'preparando' ? `<button class="order-action-btn btn-listo" data-order-id="${order.id}">Listo</button>` : ''}
                     ${order.status === 'listo' ? `<button class="order-action-btn btn-encamino" data-order-id="${order.id}">En Camino</button>` : ''}
@@ -3959,7 +3994,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const deliveryNote = $('pos-delivery-note') ? $('pos-delivery-note').value.trim() : '';
         const sale = {
-            items: posCart.map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, size: i.size || '', total: i.price * i.qty })),
+            items: posCart.map(i => ({ productId: i.productId || null, name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, size: i.size || '', total: i.price * i.qty })),
             subtotal,
             discount: posDiscountPercent,
             discountAmount: discountAmount,
@@ -4021,6 +4056,7 @@ document.addEventListener('DOMContentLoaded', function() {
             let count = 0, total = 0;
             snapshot.forEach(doc => {
                 const data = doc.data();
+                if (data.voided) return; // Exclude voided sales
                 count++;
                 total += data.total || 0;
             });
@@ -5851,6 +5887,8 @@ document.addEventListener('DOMContentLoaded', function() {
             salesSnap.forEach(doc => {
                 const d = doc.data();
                 if (!d.createdAt) return;
+                // Skip voided sales
+                if (d.voided) return;
                 const date = new Date(d.createdAt.seconds * 1000);
                 transactions.push({
                     timestamp: date,
@@ -7381,12 +7419,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 menuFirestoreItems.push({ _docId: doc.id, ...doc.data() });
             });
             menuItemsLoaded = true;
-            renderMenuAdmin();
+            // Re-render admin menu if in admin mode
+            if (adminMode) renderMenuAdmin();
+            // Re-render customer menu if not in admin mode
+            if (!adminMode) {
+                const activeTab = document.querySelector('.tab.active');
+                if (activeTab) renderCategory(activeTab.dataset.category);
+            }
         }, (err) => {
             console.error('Menu listener error:', err);
             menuItemsLoaded = true;
             menuFirestoreItems = [];
-            renderMenuAdmin();
+            if (adminMode) renderMenuAdmin();
         });
     }
 
