@@ -589,6 +589,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Load customer features if has phone
         if (currentUser.role !== 'admin' && currentUser.phone) {
             showMisPedidosTab();
+            startCustomerOrdersListener(currentUser.phone);
             loadCustomerOrderHistory(currentUser.phone).then(() => {
                 const activeTab = document.querySelector('.tab.active');
                 if (activeTab && activeTab.dataset.category === 'inicio') {
@@ -1829,7 +1830,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Custom tip button
     document.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-tip="custom"]');
+        const btn = e.target.closest('.tip-btn[data-tip="custom"]');
         if (!btn) return;
         $('tip-custom-input').classList.toggle('hidden');
         document.querySelectorAll('.tip-btn').forEach(b => b.classList.remove('active'));
@@ -1930,6 +1931,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.head.appendChild(leafletJS);
             } else if (window.L) {
                 setupMap(mapContainer);
+            } else {
+                // CSS loaded but JS still loading — wait for it
+                const existingScript = document.querySelector('script[src*="leaflet"]');
+                if (existingScript) existingScript.addEventListener('load', () => setupMap(mapContainer));
             }
         } else if (deliveryMap) {
             setTimeout(() => deliveryMap.invalidateSize(), 300);
@@ -2518,17 +2523,18 @@ document.addEventListener('DOMContentLoaded', function() {
         db.collection('orders').where('number', '==', orderId).get().then(snap => {
             snap.forEach(doc => {
                 const order = doc.data();
-                // First update status and payment confirmation (without inventoryDecremented flag yet)
+                // Guard: skip if already processed (prevents double-decrement on duplicate callbacks)
+                if (order.inventoryDecremented) return;
+                // Update status and payment confirmation
                 doc.ref.update({
                     status: 'pendiente',
                     paymentConfirmed: true,
-                    paymentDate: new Date()
+                    paymentDate: new Date(),
+                    inventoryDecremented: true
                 });
-                // Decrement inventory, then mark flag only on success
+                // Decrement inventory now that payment is confirmed
                 const items = order.items || [];
                 decrementInventoryOnSale(items.map(i => ({ name: i.name, productId: i.productId, qty: i.quantity || 1 })));
-                // Mark inventoryDecremented after decrement call (best-effort)
-                doc.ref.update({ inventoryDecremented: true });
                 // Track customer AFTER payment confirmed
                 if (order.customerPhone) {
                     upsertCustomer(order.customerPhone, order.customerName, order.total || 0, 'online', order.address || '');
@@ -2581,9 +2587,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     })();
 
+    let _orderDirectProcessing = false;
     function processOrderDirect() {
         // Process order and save to Firestore
+        if (_orderDirectProcessing) return;
         if (cart.length === 0) return;
+        _orderDirectProcessing = true;
         // Validate delivery location on map
         if (!mapMarker || currentDeliveryFee <= 0) {
             showToast('Selecciona tu ubicación de entrega en el mapa', 'error');
@@ -2615,21 +2624,25 @@ document.addEventListener('DOMContentLoaded', function() {
             date: new Date().toLocaleDateString('es-PA'),
             status: 'pendiente',
             deviceType: detectDeviceType(),
-            inventoryDecremented: true,
+            inventoryDecremented: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         // Save to Firestore
         if (typeof db !== 'undefined') {
-            db.collection('orders').add(orderData).then(() => {
-                // FIX #6: Decrement inventory and track customer for direct/cash orders too
+            db.collection('orders').add(orderData).then((docRef) => {
+                // Decrement inventory and mark flag
                 decrementInventoryOnSale(orderData.items.map(i => ({ productId: i.productId, name: i.name, qty: i.quantity || 1 })));
+                docRef.update({ inventoryDecremented: true });
                 const custPhone = currentUser ? (currentUser.phone || '') : '';
                 const custName = currentUser ? (currentUser.name || 'Invitado') : 'Invitado';
                 if (custPhone) {
                     upsertCustomer(custPhone, custName, orderData.total, 'online', deliveryAddress || '');
                 }
-            }).catch(err => console.error('Error saving order:', err));
+                _orderDirectProcessing = false;
+            }).catch(err => { console.error('Error saving order:', err); _orderDirectProcessing = false; });
+        } else {
+            _orderDirectProcessing = false;
         }
 
         // Also keep local
@@ -5628,6 +5641,7 @@ document.addEventListener('DOMContentLoaded', function() {
             ordersSnap.forEach(doc => {
                 const d = doc.data();
                 if (d.status === 'cancelado') return;
+                if (d.status === 'esperando_pago') return;
                 // Skip orders already converted to sales to avoid double-counting
                 if (d.convertedToSale) return;
                 factInvoices.push({
@@ -5861,6 +5875,29 @@ document.addEventListener('DOMContentLoaded', function() {
             inv.voided = true;
             inv.voidReason = reason;
             inv.voidedAt = new Date();
+            // Restore inventory for voided items
+            const items = inv.items || [];
+            if (items.length > 0) {
+                const batch = db.batch();
+                let hasUpdates = false;
+                items.forEach(item => {
+                    const qty = item.qty || item.quantity || 1;
+                    if (typeof item.productId === 'string' && item.productId.startsWith('t')) return;
+                    let product = null;
+                    if (item.productId) product = getMenuItems().find(p => String(p.id) === String(item.productId));
+                    if (!product) product = getMenuItems().find(p => p.name === item.name);
+                    if (!product) return;
+                    const invRef = db.collection('inventory').doc(String(product.id));
+                    const cached = inventoryCache[String(product.id)];
+                    if (cached && cached.stockQty !== undefined) {
+                        const newStock = cached.stockQty + qty;
+                        batch.set(invRef, { stockQty: newStock }, { merge: true });
+                        inventoryCache[String(product.id)].stockQty = newStock;
+                        hasUpdates = true;
+                    }
+                });
+                if (hasUpdates) batch.commit().catch(err => console.error('Error restoring inventory on void:', err));
+            }
             showToast('Factura anulada correctamente', 'success');
             $('fact-void-modal').classList.add('hidden');
             $('fact-modal').classList.add('hidden');
@@ -5929,6 +5966,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     deviceType: d.deviceType || null,
                     customerPhone: d.customerPhone || null,
                     customerName: d.customerName || null,
+                    source: d.source || '',
                     status: 'completed',
                     type: 'sale'
                 });
@@ -5982,9 +6020,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalTx = transactions.length;
         const totalRevenue = transactions.reduce((s, t) => s + t.total, 0);
         const avgTicket = totalTx > 0 ? totalRevenue / totalTx : 0;
-        const orders = transactions.filter(t => t.type === 'order');
-        const completed = orders.filter(t => t.status === 'entregado' || t.status === 'listo');
-        const completionRate = orders.length > 0 ? (completed.length / orders.length * 100) : 100;
+        // Count online orders + online-converted sales for completion rate
+        const onlineOrders = transactions.filter(t => t.type === 'order');
+        const onlineSalesCompleted = transactions.filter(t => t.type === 'sale' && t.source === 'online');
+        const totalOnline = onlineOrders.length + onlineSalesCompleted.length;
+        const completed = onlineOrders.filter(t => t.status === 'entregado' || t.status === 'listo');
+        const completionRate = totalOnline > 0 ? ((completed.length + onlineSalesCompleted.length) / totalOnline * 100) : 100;
         // Peak hour
         const hourCounts = {};
         transactions.forEach(t => { hourCounts[t.hour] = (hourCounts[t.hour] || 0) + 1; });
@@ -6143,7 +6184,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderBehCustomerPatterns(transactions) {
         const container = $('beh-customer-patterns');
         if (!container) return;
-        const orders = transactions.filter(t => t.type === 'order' && t.customerPhone);
+        const orders = transactions.filter(t => t.customerPhone);
         const customerMap = {};
         orders.forEach(t => {
             const phone = t.customerPhone;
