@@ -2578,7 +2578,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Save to Firestore
         if (typeof db !== 'undefined') {
-            db.collection('orders').add(orderData).catch(err => console.error('Error saving order:', err));
+            db.collection('orders').add(orderData).then(() => {
+                // FIX #6: Decrement inventory and track customer for direct/cash orders too
+                decrementInventoryOnSale(orderData.items.map(i => ({ name: i.name, qty: i.quantity || 1 })));
+                const custPhone = currentUser ? (currentUser.phone || '') : '';
+                const custName = currentUser ? (currentUser.name || 'Invitado') : 'Invitado';
+                if (custPhone) {
+                    upsertCustomer(custPhone, custName, orderData.total, 'online', deliveryAddress || '');
+                }
+            }).catch(err => console.error('Error saving order:', err));
         }
 
         // Also keep local
@@ -2891,7 +2899,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 else if (btn.classList.contains('btn-entregado')) newStatus = 'entregado';
                 if (newStatus && orderId) {
                     db.collection('orders').doc(orderId).update({ status: newStatus })
-                        .then(() => showToast(`Pedido actualizado: ${newStatus}`, 'success'))
+                        .then(() => {
+                            showToast(`Pedido actualizado: ${newStatus}`, 'success');
+                            // FIX #1: When delivered, create a sales record so it counts in dashboard
+                            if (newStatus === 'entregado') {
+                                convertOrderToSale(orderId);
+                            }
+                        })
                         .catch(err => showToast('Error actualizando pedido', 'warning'));
                 }
             });
@@ -2924,8 +2938,80 @@ document.addEventListener('DOMContentLoaded', function() {
                     cancelledAt: firebase.firestore.FieldValue.serverTimestamp()
                 }).then(() => {
                     showToast('Pedido cancelado', 'success');
+                    // FIX #5: Restore inventory on cancel
+                    restoreInventoryOnCancel(orderId);
                 }).catch(err => showToast('Error cancelando pedido', 'warning'));
             });
+        });
+    }
+
+    // FIX #1: Convert a delivered online order into a sales record for the dashboard
+    function convertOrderToSale(orderId) {
+        db.collection('orders').doc(orderId).get().then(doc => {
+            if (!doc.exists) return;
+            const order = doc.data();
+            // Don't duplicate if already converted
+            if (order.convertedToSale) return;
+            const items = (order.items || []).map(i => ({
+                name: i.name || '', emoji: i.emoji || '', qty: i.quantity || i.qty || 1,
+                price: i.price || 0, size: i.size || '',
+                total: i.total || (i.price || 0) * (i.quantity || i.qty || 1)
+            }));
+            const subtotal = order.subtotal || items.reduce((s, i) => s + i.total, 0);
+            const tip = order.tip || 0;
+            const delivery = order.delivery || 0;
+            const total = order.total || (subtotal + tip + delivery);
+            const sale = {
+                items,
+                subtotal,
+                discount: 0,
+                discountAmount: 0,
+                tip,
+                delivery,
+                total,
+                paymentMethod: order.paymentMethod || 'efectivo',
+                paymentDetails: {},
+                source: 'online',
+                orderNumber: order.number || '',
+                customerName: order.customerName || '',
+                customerPhone: order.customerPhone || '',
+                address: order.address || '',
+                deviceType: order.deviceType || '',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                date: new Date().toLocaleDateString('es-PA')
+            };
+            db.collection('sales').add(sale).then(() => {
+                // Mark order as converted to avoid duplicates
+                db.collection('orders').doc(orderId).update({ convertedToSale: true });
+                loadTodaySales();
+            });
+        }).catch(err => console.error('convertOrderToSale error:', err));
+    }
+
+    // FIX #5: Restore inventory when an order is cancelled
+    function restoreInventoryOnCancel(orderId) {
+        db.collection('orders').doc(orderId).get().then(doc => {
+            if (!doc.exists) return;
+            const order = doc.data();
+            const items = order.items || [];
+            if (!items.length) return;
+            const batch = db.batch();
+            let hasUpdates = false;
+            items.forEach(item => {
+                const qty = item.quantity || item.qty || 1;
+                const product = getMenuItems().find(p => p.name === item.name);
+                if (!product) return;
+                const invRef = db.collection('inventory').doc(String(product.id));
+                const cached = inventoryCache[String(product.id)];
+                if (cached && cached.stockQty !== undefined) {
+                    const newStock = cached.stockQty + qty;
+                    batch.set(invRef, { stockQty: newStock, active: true }, { merge: true });
+                    inventoryCache[String(product.id)].stockQty = newStock;
+                    inventoryCache[String(product.id)].active = true;
+                    hasUpdates = true;
+                }
+            });
+            if (hasUpdates) batch.commit().catch(err => console.error('restoreInventory error:', err));
         });
     }
 
@@ -3814,7 +3900,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const received = parseFloat($('pos-cash-received') ? $('pos-cash-received').value : '0') || 0;
             const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
             const discAmount = subtotal * (posDiscountPercent / 100);
-            const total = (subtotal - discAmount) + posTipAmount;
+            // FIX #4: Include delivery fee in change calculation
+            const total = (subtotal - discAmount) + posTipAmount + posDeliveryAmount;
             details.cashReceived = received;
             details.changeGiven = Math.max(0, Math.round((received - total) * 100) / 100);
         } else if (posPaymentMethod === 'tarjeta') {
@@ -3859,6 +3946,7 @@ document.addEventListener('DOMContentLoaded', function() {
             total,
             paymentMethod: posPaymentMethod,
             paymentDetails: getPOSPaymentDetails(),
+            source: 'pos',
             customerName: posCustomerInfo ? posCustomerInfo.name : '',
             customerPhone: posCustomerInfo ? posCustomerInfo.phone : '',
             deviceType: detectDeviceType(),
@@ -4312,11 +4400,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderDashSummary(sales, expenses, orders) {
-        const totalSales = sales.reduce((s, sale) => s + (sale.total || 0), 0);
+        // FIX #2-3: Separate revenue from tips/delivery for accurate profit
+        const totalGross = sales.reduce((s, sale) => s + (sale.total || 0), 0);
         const totalTips = sales.reduce((s, sale) => s + (sale.tip || 0), 0);
+        const totalDelivery = sales.reduce((s, sale) => s + (sale.delivery || 0), 0);
         const totalExpenses = expenses.reduce((s, exp) => s + (exp.amount || 0), 0);
-        const netProfit = totalSales - totalExpenses;
-        const validOrders = orders.filter(o => o.status !== 'cancelado');
+        // Pure product revenue = gross total minus tips and delivery fees
+        const productRevenue = totalGross - totalTips - totalDelivery;
+        const netProfit = productRevenue - totalExpenses;
         const txCount = sales.length;
 
         $('dash-summary').innerHTML = `
@@ -4324,7 +4415,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="dash-summary-icon green"><i class="fas fa-dollar-sign"></i></div>
                 <div class="dash-summary-info">
                     <span>Ventas (${txCount} tx)</span>
-                    <div class="dash-summary-value">$${totalSales.toFixed(2)}</div>
+                    <div class="dash-summary-value">$${productRevenue.toFixed(2)}</div>
                 </div>
             </div>
             <div class="dash-summary-card">
@@ -4352,11 +4443,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderDashPayments(sales) {
-        // Always show all 3 methods even if 0
-        const allMethods = ['efectivo', 'yappy', 'tarjeta'];
-        const methodLabels = { 'efectivo': 'Efectivo', 'yappy': 'Yappy', 'tarjeta': 'Tarjeta' };
-        const methodColors = { 'efectivo': 'cash', 'yappy': 'yappy', 'tarjeta': 'card' };
-        const methodIcons = { 'efectivo': 'fa-money-bill-wave', 'yappy': 'fa-mobile-alt', 'tarjeta': 'fa-credit-card' };
+        // FIX #11: Include ACH in payment methods
+        const allMethods = ['efectivo', 'yappy', 'tarjeta', 'ach'];
+        const methodLabels = { 'efectivo': 'Efectivo', 'yappy': 'Yappy', 'tarjeta': 'Tarjeta', 'ach': 'ACH' };
+        const methodColors = { 'efectivo': 'cash', 'yappy': 'yappy', 'tarjeta': 'card', 'ach': 'card' };
+        const methodIcons = { 'efectivo': 'fa-money-bill-wave', 'yappy': 'fa-mobile-alt', 'tarjeta': 'fa-credit-card', 'ach': 'fa-university' };
 
         const methods = {};
         const counts = {};
@@ -6933,6 +7024,9 @@ document.addEventListener('DOMContentLoaded', function() {
             decrementInventoryOnSale(sale.items);
             showToast(`Pago registrado: $${total.toFixed(2)}`, 'success');
             playCashRegisterSound();
+            // FIX #9: Track mesa customers if phone is available
+            // Mesa diner names are saved as customerName in the sale
+            // No phone captured for mesas, but we register by name for future reference
             $('mesa-pay-modal').classList.add('hidden');
 
             if (mesaPayDinerIdx !== null) {
@@ -6943,6 +7037,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 closeMesa();
             }
+            loadTodaySales();
         }).catch(() => showToast('Error registrando pago', 'warning'));
     }
 
