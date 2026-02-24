@@ -1989,6 +1989,8 @@ body {
     grid-template-columns: 1fr 380px;
     gap: 24px;
     min-height: calc(100vh - 140px);
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .pos-products {
@@ -3548,15 +3550,18 @@ body {
 /* POS Responsive — Phones */
 @media (max-width: 600px) {
     .admin-main {
-        padding: 12px;
+        padding: 8px;
+    }
+    .pos-layout {
+        gap: 12px;
     }
     .pos-products-grid {
         grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
+        gap: 6px;
     }
     .pos-product-card {
-        padding: 10px 6px;
-        gap: 6px;
+        padding: 8px 4px;
+        gap: 4px;
     }
     .pos-product-img {
         width: 64px;
@@ -3564,9 +3569,11 @@ body {
     }
     .pos-product-name {
         font-size: 11px;
+        white-space: nowrap;
     }
     .pos-product-price {
         font-size: 11px;
+        white-space: nowrap;
     }
 }
 
