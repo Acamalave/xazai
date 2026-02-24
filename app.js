@@ -43,6 +43,42 @@ document.addEventListener('DOMContentLoaded', function() {
     let orders = [];
     let orderCounter = parseInt(localStorage.getItem('xazai_orderCounter') || '1000', 10);
     let expandedCardId = null;
+    // Session-based shuffle for bowls & smoothies
+    const sessionSeed = (function() {
+        let seed = sessionStorage.getItem('xazai_shuffle_seed');
+        if (!seed) {
+            seed = String(Math.random());
+            sessionStorage.setItem('xazai_shuffle_seed', seed);
+        }
+        return parseFloat(seed);
+    })();
+
+    function seededRandom(seed) {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+    }
+
+    function sessionShuffle(arr) {
+        const shuffled = arr.slice();
+        let s = sessionSeed;
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            s = seededRandom(s * 1000 + i);
+            const j = Math.floor(s * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    }
+
+    const SHUFFLE_CATEGORIES = ['bowls', 'smoothies'];
+
+    // Menu admin state (must be at top to avoid TDZ)
+    let menuFirestoreItems = [];
+    let menuItemsLoaded = false;
+    let menuUnsubscribe = null;
+    let editingMenuItemId = null;
+    let menuImageBase64 = '';
+    let menuFormIngredients = [];
+    let menuFormToppings = [];
 
     // DOM
     const $ = id => document.getElementById(id);
@@ -595,7 +631,7 @@ document.addEventListener('DOMContentLoaded', function() {
         for (const order of customerOrderHistory) {
             if (order.status === 'cancelado') continue;
             for (const item of (order.items || [])) {
-                const menuItem = MENU_ITEMS.find(m => m.name === item.name);
+                const menuItem = getMenuItems().find(m => m.name === item.name);
                 if (menuItem && !seen.has(menuItem.id) && isProductAvailable(menuItem.id)) {
                     seen.add(menuItem.id);
                     reorderItems.push({ menuItem, lastSize: item.size || '' });
@@ -634,7 +670,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const productId = parseInt(btn.dataset.id);
-                const product = MENU_ITEMS.find(i => i.id === productId);
+                const product = getMenuItems().find(i => i.id === productId);
                 if (!product) return;
                 // Direct add for simple products (bebidas, shots, cafe)
                 const directCats = ['bebidas', 'shots', 'cafe'];
@@ -1004,8 +1040,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         cats.forEach(catKey => {
             const cat = CATEGORIES[catKey];
-            const items = MENU_ITEMS.filter(i => i.category === catKey && isProductAvailable(i.id));
+            let items = getMenuItems().filter(i => i.category === catKey && isProductAvailable(i.id));
             if (items.length === 0) return;
+            if (SHUFFLE_CATEGORIES.includes(catKey)) items = sessionShuffle(items);
             html += `<div class="category-divider"><h3><i class="fas ${cat.icon}"></i> ${cat.name}</h3></div>`;
             html += items.map(item => buildCardHTML(item)).join('');
         });
@@ -1058,12 +1095,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const DIRECT_ADD_CATEGORIES = ['bebidas'];
 
     function isDirectAddProduct(productId) {
-        const product = MENU_ITEMS.find(i => i.id === productId);
+        const product = getMenuItems().find(i => i.id === productId);
         return product && DIRECT_ADD_CATEGORIES.includes(product.category);
     }
 
     function addDirectToCart(productId) {
-        const product = MENU_ITEMS.find(i => i.id === productId);
+        const product = getMenuItems().find(i => i.id === productId);
         if (!product) return;
 
         // Check if already in cart, if so increment quantity
@@ -1125,7 +1162,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function renderProducts(category) {
-        const items = MENU_ITEMS.filter(i => i.category === category && isProductAvailable(i.id));
+        let items = getMenuItems().filter(i => i.category === category && isProductAvailable(i.id));
+        if (SHUFFLE_CATEGORIES.includes(category)) items = sessionShuffle(items);
         productsGrid.innerHTML = items.map(item => buildCardHTML(item)).join('');
         bindAllCardEvents();
     }
@@ -1154,7 +1192,7 @@ document.addEventListener('DOMContentLoaded', function() {
         expandedCardId = productId;
         cardEl.classList.add('expanded');
 
-        const product = MENU_ITEMS.find(i => i.id === productId);
+        const product = getMenuItems().find(i => i.id === productId);
         expandEl.innerHTML = buildExpandContent(product);
         expandEl.classList.remove('hidden');
 
@@ -1992,59 +2030,91 @@ document.addEventListener('DOMContentLoaded', function() {
             updateDeliveryFeeFromMarker(lat, lng);
         }
 
-        // Local database of known PHs/buildings in Panama City
+        // Local database of known PHs/buildings in Panama City (coordenadas verificadas)
         const LOCAL_PLACES = [
-            { name: 'PH South Coast Tower, Costa del Este', lat: 9.0108, lng: -79.4628 },
-            { name: 'PH Vitri Tower, Costa del Este', lat: 9.0125, lng: -79.4645 },
-            { name: 'PH Ocean Two, Costa del Este', lat: 9.0095, lng: -79.4610 },
-            { name: 'PH Breeze, Costa del Este', lat: 9.0130, lng: -79.4660 },
-            { name: 'PH Destiny, Costa del Este', lat: 9.0102, lng: -79.4622 },
-            { name: 'PH Pearl at the Sea, Costa del Este', lat: 9.0088, lng: -79.4605 },
-            { name: 'PH Portovita, Costa del Este', lat: 9.0115, lng: -79.4638 },
-            { name: 'PH Pijao, Costa del Este', lat: 9.0098, lng: -79.4618 },
-            { name: 'PH Costa View, Costa del Este', lat: 9.0120, lng: -79.4650 },
-            { name: 'PH Mar del Sur, Costa del Este', lat: 9.0080, lng: -79.4600 },
-            { name: 'PH Green Bay, Costa del Este', lat: 9.0135, lng: -79.4670 },
-            { name: 'PH Acqua, Costa del Este', lat: 9.0092, lng: -79.4615 },
-            { name: 'PH Pacific Village, Costa del Este', lat: 9.0140, lng: -79.4675 },
-            { name: 'PH Pacific Point, Punta Pacífica', lat: 8.9820, lng: -79.5200 },
-            { name: 'PH The Point, Punta Pacífica', lat: 8.9810, lng: -79.5195 },
-            { name: 'PH Ocean Park, Punta Pacífica', lat: 8.9815, lng: -79.5190 },
-            { name: 'PH Grand Tower, Punta Pacífica', lat: 8.9825, lng: -79.5210 },
-            { name: 'PH Megapolis, Punta Pacífica', lat: 8.9830, lng: -79.5220 },
-            { name: 'PH JW Marriott, Punta Pacífica', lat: 8.9808, lng: -79.5185 },
-            { name: 'PH Oasis on the Bay, Av. Balboa', lat: 8.9750, lng: -79.5280 },
-            { name: 'PH Yoo Panama, Av. Balboa', lat: 8.9755, lng: -79.5275 },
-            { name: 'PH White Tower, Av. Balboa', lat: 8.9760, lng: -79.5260 },
-            { name: 'PH Rivage, Av. Balboa', lat: 8.9745, lng: -79.5290 },
-            { name: 'PH Ten Tower, Av. Balboa', lat: 8.9752, lng: -79.5270 },
-            { name: 'PH Pacific Star, San Francisco', lat: 8.9900, lng: -79.5050 },
-            { name: 'PH Dupont, San Francisco', lat: 8.9910, lng: -79.5040 },
-            { name: 'PH Midtown, San Francisco', lat: 8.9920, lng: -79.5030 },
-            { name: 'PH Sky, San Francisco', lat: 8.9905, lng: -79.5045 },
-            { name: 'PH Element, San Francisco', lat: 8.9915, lng: -79.5035 },
-            { name: 'PH Q Tower, San Francisco', lat: 8.9925, lng: -79.5025 },
-            { name: 'PH Generation Tower, San Francisco', lat: 8.9895, lng: -79.5055 },
-            { name: 'PH Park Loft, San Francisco', lat: 8.9930, lng: -79.5020 },
-            { name: 'PH Scala, El Cangrejo', lat: 8.9830, lng: -79.5350 },
-            { name: 'PH Titanium, El Cangrejo', lat: 8.9835, lng: -79.5340 },
-            { name: 'Torres de las Américas, Punta Pacífica', lat: 8.9822, lng: -79.5205 },
-            { name: 'Town Center, Costa del Este', lat: 9.0145, lng: -79.4680 },
-            { name: 'Parque Urraca, Bella Vista', lat: 8.9790, lng: -79.5310 },
-            { name: 'Santa María Golf, Brisas del Golf', lat: 9.0370, lng: -79.4710 },
-            { name: 'Ciudad del Saber, Clayton', lat: 9.0190, lng: -79.5650 },
-            { name: 'Albrook Mall, Albrook', lat: 9.0060, lng: -79.5540 },
-            { name: 'Multiplaza, Punta Pacífica', lat: 8.9835, lng: -79.5230 },
-            { name: 'MetroMall, Vía España', lat: 9.0005, lng: -79.5100 },
-            { name: 'Altaplaza Mall, Condado del Rey', lat: 9.0370, lng: -79.5150 },
+            // === COSTA DEL ESTE ===
+            { name: 'PH Vitri Tower, Costa del Este', lat: 9.0108, lng: -79.4637, aliases: ['vitri'] },
+            { name: 'PH Pearl at the Sea, Costa del Este', lat: 9.0106, lng: -79.4660, aliases: ['pearl'] },
+            { name: 'PH Costa View, Costa del Este', lat: 9.0132, lng: -79.4770, aliases: ['costa view'] },
+            { name: 'PH Ocean Two, Costa del Este', lat: 9.0113, lng: -79.4644, aliases: ['ocean two'] },
+            { name: 'PH Breeze, Costa del Este', lat: 9.0096, lng: -79.4651, aliases: ['breeze'] },
+            { name: 'PH Destiny, Costa del Este', lat: 9.0102, lng: -79.4622, aliases: ['destiny costa'] },
+            { name: 'PH Portovita, Costa del Este', lat: 9.0115, lng: -79.4638, aliases: ['portovita'] },
+            { name: 'PH Pijao, Costa del Este', lat: 9.0098, lng: -79.4618, aliases: ['pijao'] },
+            { name: 'PH Mar del Sur, Bella Vista', lat: 8.9894, lng: -79.5231, aliases: ['mar del sur'] },
+            { name: 'PH Green Bay, Costa del Este', lat: 9.0135, lng: -79.4670, aliases: ['green bay'] },
+            { name: 'PH Acqua, Costa del Este', lat: 9.0092, lng: -79.4615, aliases: ['acqua'] },
+            { name: 'PH Pacific Village, Costa del Este', lat: 9.0140, lng: -79.4675, aliases: ['pacific village'] },
+            { name: 'PH Ten Tower, Costa del Este', lat: 9.0110, lng: -79.4643, aliases: ['ten tower'] },
+            { name: 'Town Center Costa del Este', lat: 9.0145, lng: -79.4680, aliases: ['town center'] },
+            // === SAN FRANCISCO ===
+            { name: 'PH South Coast Tower, San Francisco', lat: 8.9938, lng: -79.5051, aliases: ['south coast'] },
+            { name: 'PH Oasis Tower, San Francisco', lat: 8.9927, lng: -79.5172, aliases: ['oasis'] },
+            { name: 'PH Pacific Star, San Francisco', lat: 8.9900, lng: -79.5050, aliases: ['pacific star'] },
+            { name: 'PH Dupont, San Francisco', lat: 8.9910, lng: -79.5040, aliases: ['dupont'] },
+            { name: 'PH Midtown, San Francisco', lat: 8.9920, lng: -79.5030, aliases: ['midtown'] },
+            { name: 'PH Sky, San Francisco', lat: 8.9905, lng: -79.5045, aliases: ['sky san francisco'] },
+            { name: 'PH Element, San Francisco', lat: 8.9915, lng: -79.5035, aliases: ['element'] },
+            { name: 'PH Q Tower, San Francisco', lat: 8.9925, lng: -79.5025, aliases: ['q tower'] },
+            { name: 'PH Generation Tower, San Francisco', lat: 8.9895, lng: -79.5055, aliases: ['generation'] },
+            { name: 'PH Park Loft, San Francisco', lat: 8.9930, lng: -79.5020, aliases: ['park loft'] },
+            { name: 'PH Terrazas del Pacífico, San Francisco', lat: 8.9912, lng: -79.5048, aliases: ['terrazas pacifico'] },
+            { name: 'PH Green House, San Francisco', lat: 8.9918, lng: -79.5038, aliases: ['green house'] },
+            // === PUNTA PACIFICA ===
+            { name: 'PH Pacific Point, Punta Pacífica', lat: 8.9820, lng: -79.5200, aliases: ['pacific point'] },
+            { name: 'PH The Point, Punta Pacífica', lat: 8.9810, lng: -79.5195, aliases: ['the point'] },
+            { name: 'PH Ocean Park, Punta Pacífica', lat: 8.9815, lng: -79.5190, aliases: ['ocean park'] },
+            { name: 'PH Grand Tower, Punta Pacífica', lat: 8.9825, lng: -79.5210, aliases: ['grand tower'] },
+            { name: 'PH Megapolis, Punta Pacífica', lat: 8.9830, lng: -79.5220, aliases: ['megapolis'] },
+            { name: 'JW Marriott, Punta Pacífica', lat: 8.9808, lng: -79.5185, aliases: ['marriott', 'jw marriott'] },
+            { name: 'Torres de las Américas, Punta Pacífica', lat: 8.9822, lng: -79.5205, aliases: ['torres americas'] },
+            { name: 'Multiplaza Pacific, Punta Pacífica', lat: 8.9835, lng: -79.5230, aliases: ['multiplaza'] },
+            { name: 'Soho Mall, Obarrio', lat: 8.9850, lng: -79.5260, aliases: ['soho mall'] },
+            // === AV. BALBOA / BELLA VISTA / CINTA COSTERA ===
+            { name: 'PH Oasis on the Bay, Av. Balboa', lat: 8.9750, lng: -79.5280, aliases: ['oasis bay', 'oasis on the bay'] },
+            { name: 'PH Yoo Panama, Av. Balboa', lat: 8.9755, lng: -79.5275, aliases: ['yoo panama', 'yoo'] },
+            { name: 'PH White Tower, Av. Balboa', lat: 8.9760, lng: -79.5260, aliases: ['white tower'] },
+            { name: 'PH Rivage, Av. Balboa', lat: 8.9745, lng: -79.5290, aliases: ['rivage'] },
+            { name: 'PH Arts Tower, Av. Balboa', lat: 8.9758, lng: -79.5265, aliases: ['arts tower'] },
+            { name: 'PH Bay View, Av. Balboa', lat: 8.9748, lng: -79.5285, aliases: ['bay view', 'bayview'] },
+            { name: 'Destiny Tower, Calidonia', lat: 8.9677, lng: -79.5331, aliases: ['destiny tower', 'destiny calidonia'] },
+            { name: 'Parque Urraca, Bella Vista', lat: 8.9790, lng: -79.5310, aliases: ['parque urracá', 'urraca'] },
+            // === EL CANGREJO / OBARRIO ===
+            { name: 'PH Scala, El Cangrejo', lat: 8.9830, lng: -79.5350, aliases: ['scala'] },
+            { name: 'PH Titanium, Parque Lefevre', lat: 8.9835, lng: -79.5340, aliases: ['titanium'] },
+            { name: 'Tower Financial Center, Obarrio', lat: 8.9840, lng: -79.5345, aliases: ['financial center', 'tower financial'] },
+            // === MALLS ===
+            { name: 'Albrook Mall, Albrook', lat: 9.0060, lng: -79.5540, aliases: ['albrook mall', 'albrook'] },
+            { name: 'MetroMall, Vía España', lat: 9.0005, lng: -79.5100, aliases: ['metromall', 'metro mall'] },
+            { name: 'Altaplaza Mall, Condado del Rey', lat: 9.0370, lng: -79.5150, aliases: ['altaplaza'] },
+            // === OTROS ===
+            { name: 'Ciudad del Saber, Clayton', lat: 9.0190, lng: -79.5650, aliases: ['ciudad del saber', 'clayton'] },
+            { name: 'Santa María Golf, Brisas del Golf', lat: 9.0370, lng: -79.4710, aliases: ['santa maria golf'] },
+            { name: 'Universidad de Panamá, El Cangrejo', lat: 9.0005, lng: -79.5316, aliases: ['universidad panama', 'up'] },
+            { name: 'Hospital Nacional, Bella Vista', lat: 8.9842, lng: -79.5268, aliases: ['hospital nacional'] },
+            { name: 'Hospital Punta Pacífica', lat: 8.9813, lng: -79.5198, aliases: ['hospital punta pacifica', 'johns hopkins'] },
+            { name: 'Aeropuerto Marcos A. Gelabert, Albrook', lat: 9.0060, lng: -79.5560, aliases: ['marcos gelabert', 'aeropuerto albrook'] },
+            { name: 'Cinta Costera, Av. Balboa', lat: 8.9700, lng: -79.5350, aliases: ['cinta costera'] },
+            { name: 'Corredor Sur, Panamá', lat: 9.0030, lng: -79.4900, aliases: ['corredor sur'] },
         ];
 
         function searchLocalPlaces(query) {
-            const q = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            return LOCAL_PLACES.filter(p => {
-                const name = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                return q.split(' ').every(word => name.includes(word));
-            }).slice(0, 4);
+            const q = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '');
+            const words = q.split(/\s+/).filter(w => w.length > 1);
+            if (words.length === 0) return [];
+            // Score each place by how many words match + bonus for exact phrase match
+            const scored = LOCAL_PLACES.map(p => {
+                const name = p.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s,]/g, '');
+                const aliases = (p.aliases || []).map(a => a.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+                let score = 0;
+                const matchCount = words.filter(w => name.includes(w) || aliases.some(a => a.includes(w))).length;
+                score = matchCount / words.length;
+                // Bonus for exact phrase
+                if (name.includes(q)) score += 0.5;
+                if (aliases.some(a => a.includes(q))) score += 0.5;
+                return { ...p, score };
+            }).filter(p => p.score >= 0.5).sort((a, b) => b.score - a.score);
+            return scored.slice(0, 5);
         }
 
         function performSearch(query) {
@@ -2054,9 +2124,9 @@ document.addEventListener('DOMContentLoaded', function() {
             sDiv.innerHTML = '<div class="map-suggestion-item" style="color:var(--text-light);cursor:default;"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';
             sDiv.classList.remove('hidden');
 
-            // Search with Nominatim bounded to Panama City metro area + Photon fallback
-            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1&viewbox=-79.60,9.10,-79.35,8.90&bounded=1&countrycodes=pa`;
-            const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query + ' Panama City')}&limit=5&lat=${STORE_LAT}&lon=${STORE_LNG}&lang=es`;
+            // Search with Nominatim (Panama) + Photon fallback (location-biased)
+            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Panamá')}&limit=5&addressdetails=1&viewbox=-79.62,9.06,-79.40,8.92&bounded=0&countrycodes=pa`;
+            const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query + ' Panama')}&limit=5&lat=${STORE_LAT}&lon=${STORE_LNG}`;
 
             // Search local PHs first (instant)
             const localResults = searchLocalPlaces(query).map(p => ({
@@ -2409,6 +2479,15 @@ document.addEventListener('DOMContentLoaded', function() {
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         }).then(() => {
             console.log(`Order ${orderId} saved to Firestore`);
+            // Auto-decrement inventory for online orders
+            decrementInventoryOnSale(sanitizedItems.map(i => ({ name: i.name, qty: i.quantity || 1 })));
+            // Upsert customer record
+            const custPhone = currentUser ? (currentUser.phone || '') : '';
+            const custName = currentUser ? (currentUser.name || 'Invitado') : 'Invitado';
+            const orderTotal = total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + (currentTip || 0));
+            if (custPhone) {
+                upsertCustomer(custPhone, custName, orderTotal, 'online', address || '');
+            }
         }).catch(err => {
             console.error('Error saving order:', err);
         });
@@ -2552,10 +2631,53 @@ document.addEventListener('DOMContentLoaded', function() {
     const adminDashboard = $('admin-dashboard');
     let adminMode = false;
     let ordersUnsubscribe = null;
+    let mesasUnsubscribe = null;
+    let mesasData = [];
+    let currentMesa = null;
+    let currentDinerIdx = 0;
+    let mesaPayTip = 0;
+    let mesaPayMethod = 'efectivo';
+    let mesaPayDinerIdx = null; // null = pagar toda la mesa
+    let mesaPayDiscount = 0; // discount percentage for mesa payment
+    // Expenses state (hoisting fix)
+    let expenseImageBase64 = '';
+    // Dashboard state (hoisting fix)
+    let dashRangeMode = 'day';
+    let dashRefDate = new Date();
+    // RRHH state (hoisting fix)
+    let rrhhRoles = [];
+    let rrhhCollaborators = [];
+    let rrhhEditingRoleId = null;
+    let rrhhEditingCollabId = null;
+    let rrhhClockInterval = null;
+    let rrhhCameraStream = null;
+    let rrhhCameraMode = null;
+    let rrhhCameraTargetId = null;
+    let rrhhReportRange = 'today';
+    // Attendance state (hoisting fix)
+    let attScanStream = null;
+    let attScanType = 'entrada';
+    let attClockInterval = null;
+    let attScanClockInterval = null;
+    // RRHH constants (hoisting fix)
+    const RRHH_PERMISSIONS = [
+        { key: 'gestionar_usuarios', label: 'Gestionar Usuarios', icon: 'fa-users-cog' },
+        { key: 'gestionar_roles', label: 'Gestionar Roles', icon: 'fa-user-shield' },
+        { key: 'ver_reportes', label: 'Ver Reportes', icon: 'fa-chart-bar' },
+        { key: 'registrar_asistencia', label: 'Registrar Asistencia', icon: 'fa-fingerprint' },
+        { key: 'ver_asistencia', label: 'Ver Asistencia', icon: 'fa-clipboard-list' },
+        { key: 'editar_colaboradores', label: 'Editar Colaboradores', icon: 'fa-user-edit' }
+    ];
+    const DEFAULT_ROLES = [
+        { name: 'Administrador', color: '#7b2d8e', permissions: ['gestionar_usuarios','gestionar_roles','ver_reportes','registrar_asistencia','ver_asistencia','editar_colaboradores'], isDefault: true },
+        { name: 'Supervisor', color: '#5bc0de', permissions: ['gestionar_usuarios','ver_reportes','registrar_asistencia','ver_asistencia'], isDefault: true },
+        { name: 'Colaborador', color: '#5cb85c', permissions: ['registrar_asistencia'], isDefault: true }
+    ];
     let posCart = [];
     let posPaymentMethod = 'efectivo';
     let posTipAmount = 0;
     let posDiscountPercent = 0;
+    let posDeliveryAmount = 0;
     let todaySales = [];
     let posCustomerInfo = null; // { name, phone } asociado a la venta POS
     let notificationSound = null;
@@ -2599,6 +2721,8 @@ document.addEventListener('DOMContentLoaded', function() {
         initDashboard();
         initRRHH();
         initAttendance();
+        // Start menu listener early so Firestore products are available for POS/Mesas
+        if (!menuUnsubscribe) startMenuListener();
     }
 
     function exitAdminMode() {
@@ -2607,6 +2731,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Stop listeners
         if (ordersUnsubscribe) { ordersUnsubscribe(); ordersUnsubscribe = null; }
         if (mesasUnsubscribe) { mesasUnsubscribe(); mesasUnsubscribe = null; }
+        if (menuUnsubscribe) { menuUnsubscribe(); menuUnsubscribe = null; }
         stopRRHHClock();
         stopAttClock();
         closeAttendanceScan();
@@ -2648,6 +2773,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (section === 'asistencia') { startAttClock(); loadRRHHCollaborators(); }
         if (section !== 'asistencia') stopAttClock();
         if (section === 'mesas') initMesas();
+        if (section === 'menu') initMenuAdmin();
+        if (section === 'usuarios') loadCustomers();
     });
 
     // Admin orders filter
@@ -2817,11 +2944,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderInventory(sizeFilter = 'all') {
         const container = $('inventory-list');
+        const allItems = getMenuItems();
         // Filtrar por tamaño según selección
-        let filteredItems = MENU_ITEMS;
-        if (sizeFilter === 'medio') filteredItems = MENU_ITEMS.filter(i => !i.priceGrande && !i.onlyGrande);
-        if (sizeFilter === 'both') filteredItems = MENU_ITEMS.filter(i => i.priceGrande && !i.onlyGrande);
-        if (sizeFilter === 'grande') filteredItems = MENU_ITEMS.filter(i => i.onlyGrande);
+        let filteredItems = allItems;
+        if (sizeFilter === 'medio') filteredItems = allItems.filter(i => !i.priceGrande && !i.onlyGrande);
+        if (sizeFilter === 'both') filteredItems = allItems.filter(i => i.priceGrande && !i.onlyGrande);
+        if (sizeFilter === 'grande') filteredItems = allItems.filter(i => i.onlyGrande);
         container.innerHTML = filteredItems.map(item => {
             const inv = inventoryCache[String(item.id)];
             const isActive = inv ? inv.active !== false : true;
@@ -2883,7 +3011,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     .then(() => {
                         if (!inventoryCache[productId]) inventoryCache[productId] = {};
                         inventoryCache[productId][field] = val;
-                        const name = MENU_ITEMS.find(i => i.id == productId)?.name;
+                        const name = getMenuItems().find(i => i.id == productId)?.name;
                         showToast(`${name} talla ${size}: ${val ? 'Activo' : 'Inactivo'}`, val ? 'success' : 'warning');
                     })
                     .catch(err => showToast('Error actualizando inventario', 'warning'));
@@ -2900,7 +3028,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 db.collection('inventory').doc(productId).set({ active }, { merge: true })
                     .then(() => {
                         inventoryCache[productId] = { ...inventoryCache[productId], active };
-                        showToast(`${active ? 'Activado' : 'Desactivado'}: ${MENU_ITEMS.find(i => i.id == productId)?.name}`, active ? 'success' : 'warning');
+                        showToast(`${active ? 'Activado' : 'Desactivado'}: ${getMenuItems().find(i => i.id == productId)?.name}`, active ? 'success' : 'warning');
                     })
                     .catch(err => showToast('Error actualizando inventario', 'warning'));
             });
@@ -2999,6 +3127,60 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========================================
+    // AUTO-DECREMENT INVENTORY ON SALE
+    // ========================================
+    function decrementInventoryOnSale(saleItems) {
+        if (typeof db === 'undefined') return;
+        // saleItems: array of { name, qty, productId (optional), size (optional) }
+        const batch = db.batch();
+        let hasUpdates = false;
+
+        saleItems.forEach(item => {
+            const qty = item.qty || item.quantity || 1;
+            // Find product by productId or by name
+            let product = null;
+            if (item.productId) {
+                if (typeof item.productId === 'string' && item.productId.startsWith('t')) {
+                    // Extra topping — no product-level stock to decrement
+                    return;
+                }
+                product = getMenuItems().find(p => String(p.id) === String(item.productId));
+            }
+            if (!product) {
+                product = getMenuItems().find(p => p.name === item.name);
+            }
+            if (!product) return;
+
+            const invRef = db.collection('inventory').doc(String(product.id));
+            const cached = inventoryCache[String(product.id)];
+            const currentStock = cached && cached.stockQty !== undefined ? cached.stockQty : null;
+
+            if (currentStock !== null && currentStock > 0) {
+                const newStock = Math.max(0, currentStock - qty);
+                batch.set(invRef, { stockQty: newStock }, { merge: true });
+                // Update local cache immediately
+                if (!inventoryCache[String(product.id)]) inventoryCache[String(product.id)] = {};
+                inventoryCache[String(product.id)].stockQty = newStock;
+                hasUpdates = true;
+
+                // Auto-deactivate if stock reaches 0
+                if (newStock === 0) {
+                    batch.set(invRef, { active: false }, { merge: true });
+                    inventoryCache[String(product.id)].active = false;
+                }
+            }
+        });
+
+        if (hasUpdates) {
+            batch.commit().then(() => {
+                console.log('Inventario actualizado automáticamente');
+            }).catch(err => {
+                console.error('Error actualizando inventario:', err);
+            });
+        }
+    }
+
+    // ========================================
     // POS / CAJA
     // ========================================
     function renderPOS() {
@@ -3007,7 +3189,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
         catsContainer.innerHTML = `<button class="pos-cat-btn active" data-cat="all">Todos</button>` +
             cats.map(catKey => `<button class="pos-cat-btn" data-cat="${catKey}"><i class="fas ${CATEGORIES[catKey].icon}"></i> ${CATEGORIES[catKey].name}</button>`).join('') +
-            `<button class="pos-cat-btn" data-cat="extras"><i class="fas fa-plus-circle"></i> Extras</button>`;
+            `<button class="pos-cat-btn" data-cat="extras"><i class="fas fa-plus-circle"></i> Extras</button>` +
+            `<button class="pos-cat-btn" data-cat="arma-tu-bowl"><i class="fas fa-wand-magic-sparkles"></i> Arma tu Bowl</button>`;
 
         catsContainer.addEventListener('click', (e) => {
             const btn = e.target.closest('.pos-cat-btn');
@@ -3143,6 +3326,31 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
+        // Delivery toggle & input
+        const posDeliveryToggle = $('pos-delivery-toggle');
+        if (posDeliveryToggle) {
+            posDeliveryToggle.addEventListener('change', () => {
+                const fields = $('pos-delivery-fields');
+                if (posDeliveryToggle.checked) {
+                    fields.classList.remove('hidden');
+                    posDeliveryAmount = parseFloat($('pos-delivery-amount').value) || 0;
+                } else {
+                    fields.classList.add('hidden');
+                    posDeliveryAmount = 0;
+                    $('pos-delivery-amount').value = '';
+                    $('pos-delivery-note').value = '';
+                }
+                renderPOSInvoice();
+            });
+        }
+        const posDeliveryInput = $('pos-delivery-amount');
+        if (posDeliveryInput) {
+            posDeliveryInput.addEventListener('input', () => {
+                posDeliveryAmount = parseFloat(posDeliveryInput.value) || 0;
+                renderPOSInvoice();
+            });
+        }
+
         // Cash received input
         const cashInput = $('pos-cash-received');
         if (cashInput) {
@@ -3150,7 +3358,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const received = parseFloat(cashInput.value) || 0;
                 const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
                 const discountAmt = subtotal * (posDiscountPercent / 100);
-                const total = (subtotal - discountAmt) + posTipAmount;
+                const total = (subtotal - discountAmt) + posTipAmount + posDeliveryAmount;
                 const change = received - total;
                 $('pos-change-amount').textContent = change >= 0 ? '$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
                 $('pos-change-amount').style.color = change >= 0 ? '#00e096' : '#ff6b6b';
@@ -3162,6 +3370,7 @@ document.addEventListener('DOMContentLoaded', function() {
             posCart = [];
             posTipAmount = 0;
             posDiscountPercent = 0;
+            posDeliveryAmount = 0;
             document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
             document.querySelector('.pos-tip-btn[data-tip="0"]').classList.add('active');
             $('pos-tip-custom').classList.add('hidden');
@@ -3170,6 +3379,11 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelector('.pos-discount-btn[data-discount="0"]').classList.add('active');
             $('pos-discount-custom').classList.add('hidden');
             if ($('pos-discount-amount')) $('pos-discount-amount').value = '';
+            // Reset delivery
+            if ($('pos-delivery-toggle')) $('pos-delivery-toggle').checked = false;
+            $('pos-delivery-fields').classList.add('hidden');
+            if ($('pos-delivery-amount')) $('pos-delivery-amount').value = '';
+            if ($('pos-delivery-note')) $('pos-delivery-note').value = '';
             renderPOSInvoice();
         });
 
@@ -3177,17 +3391,132 @@ document.addEventListener('DOMContentLoaded', function() {
         $('pos-charge-btn').addEventListener('click', processPOSSale);
     }
 
+    // ---- POS ARMA TU BOWL ----
+    let posBowl = { base: null, protein: null, toppings: [], dressing: null };
+
+    function renderPOSBowlBuilder(container) {
+        posBowl = { base: null, protein: null, toppings: [], dressing: null };
+
+        function optBtn(opt, type) {
+            return `<button class="mesa-bowl-opt" data-type="${type}" data-id="${opt.id}" data-price="${opt.price}" data-name="${opt.name}">
+                <span class="mesa-bowl-opt-emoji">${opt.emoji}</span>
+                <span class="mesa-bowl-opt-name">${opt.name}</span>
+                <span class="mesa-bowl-opt-price">+$${opt.price.toFixed(2)}</span>
+            </button>`;
+        }
+
+        container.innerHTML = `
+            <div class="mesa-bowl-builder">
+                <div class="mesa-bowl-step">
+                    <h4><span class="mesa-bowl-step-num">1</span> Base</h4>
+                    <div class="mesa-bowl-options" data-step="base">${BUILD_OPTIONS.bases.map(o => optBtn(o, 'base')).join('')}</div>
+                </div>
+                <div class="mesa-bowl-step">
+                    <h4><span class="mesa-bowl-step-num">2</span> Textura</h4>
+                    <div class="mesa-bowl-options" data-step="protein">${BUILD_OPTIONS.proteins.map(o => optBtn(o, 'protein')).join('')}</div>
+                </div>
+                <div class="mesa-bowl-step">
+                    <h4><span class="mesa-bowl-step-num">3</span> Toppings <small>(máx 4)</small></h4>
+                    <div class="mesa-bowl-options" data-step="topping">${BUILD_OPTIONS.toppings.map(o => optBtn(o, 'topping')).join('')}</div>
+                </div>
+                <div class="mesa-bowl-step">
+                    <h4><span class="mesa-bowl-step-num">4</span> Drizzle</h4>
+                    <div class="mesa-bowl-options" data-step="dressing">${BUILD_OPTIONS.dressings.map(o => optBtn(o, 'dressing')).join('')}</div>
+                </div>
+                <div class="mesa-bowl-summary">
+                    <div class="mesa-bowl-summary-lines" id="pos-bowl-summary-lines"><p style="color:var(--text-light);font-size:12px">Selecciona los ingredientes</p></div>
+                    <div class="mesa-bowl-summary-total"><span>Total:</span><span id="pos-bowl-total">$0.00</span></div>
+                    <button class="mesa-bowl-add-btn" id="pos-bowl-add-btn" disabled><i class="fas fa-plus"></i> Agregar Bowl a Factura</button>
+                </div>
+            </div>`;
+
+        container.querySelectorAll('.mesa-bowl-opt').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const { type, id, price, name } = btn.dataset;
+                const priceNum = parseFloat(price);
+
+                if (type === 'topping') {
+                    if (btn.classList.contains('selected')) {
+                        btn.classList.remove('selected');
+                        posBowl.toppings = posBowl.toppings.filter(t => t.id !== id);
+                    } else if (posBowl.toppings.length < 4) {
+                        btn.classList.add('selected');
+                        posBowl.toppings.push({ id, name, price: priceNum });
+                    } else {
+                        showToast('Máximo 4 toppings', 'warning');
+                    }
+                } else {
+                    btn.closest('.mesa-bowl-options').querySelectorAll('.mesa-bowl-opt').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    posBowl[type] = { id, name, price: priceNum };
+                }
+                updatePOSBowlSummary();
+            });
+        });
+
+        const addBtn = container.querySelector('#pos-bowl-add-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                if (!posBowl.base || !posBowl.protein || !posBowl.dressing) return;
+
+                let total = posBowl.base.price + posBowl.protein.price + posBowl.dressing.price;
+                total += posBowl.toppings.reduce((s, t) => s + t.price, 0);
+
+                const bowlId = 'custom-' + Date.now();
+                posCart.push({
+                    productId: bowlId,
+                    name: 'Bowl Personalizado',
+                    emoji: '🎨',
+                    price: total,
+                    size: '',
+                    qty: 1
+                });
+                renderPOSInvoice();
+                showToast('Bowl personalizado agregado', 'success');
+
+                posBowl = { base: null, protein: null, toppings: [], dressing: null };
+                container.querySelectorAll('.mesa-bowl-opt').forEach(b => b.classList.remove('selected'));
+                updatePOSBowlSummary();
+            });
+        }
+    }
+
+    function updatePOSBowlSummary() {
+        const linesEl = document.getElementById('pos-bowl-summary-lines');
+        const totalEl = document.getElementById('pos-bowl-total');
+        const addBtn = document.getElementById('pos-bowl-add-btn');
+        if (!linesEl) return;
+
+        let total = 0, lines = [];
+        if (posBowl.base) { lines.push(`<div class="mesa-bowl-line"><span>Base: ${posBowl.base.name}</span><span>$${posBowl.base.price.toFixed(2)}</span></div>`); total += posBowl.base.price; }
+        if (posBowl.protein) { lines.push(`<div class="mesa-bowl-line"><span>Textura: ${posBowl.protein.name}</span><span>$${posBowl.protein.price.toFixed(2)}</span></div>`); total += posBowl.protein.price; }
+        posBowl.toppings.forEach(t => { lines.push(`<div class="mesa-bowl-line"><span>Topping: ${t.name}</span><span>$${t.price.toFixed(2)}</span></div>`); total += t.price; });
+        if (posBowl.dressing) { lines.push(`<div class="mesa-bowl-line"><span>Drizzle: ${posBowl.dressing.name}</span><span>$${posBowl.dressing.price.toFixed(2)}</span></div>`); total += posBowl.dressing.price; }
+
+        linesEl.innerHTML = lines.length ? lines.join('') : '<p style="color:var(--text-light);font-size:12px">Selecciona los ingredientes</p>';
+        if (totalEl) totalEl.textContent = '$' + total.toFixed(2);
+        if (addBtn) addBtn.disabled = !(posBowl.base && posBowl.protein && posBowl.dressing);
+    }
+
     function renderPOSProducts(category) {
         const container = $('pos-products-grid');
+
+        // Bowl builder for POS
+        if (category === 'arma-tu-bowl') {
+            renderPOSBowlBuilder(container);
+            return;
+        }
+
+        const allItems = getMenuItems();
 
         // Build list of menu items
         let menuItems = [];
         if (category === 'extras') {
             menuItems = [];
         } else if (category === 'all') {
-            menuItems = MENU_ITEMS;
+            menuItems = allItems;
         } else {
-            menuItems = MENU_ITEMS.filter(i => i.category === category);
+            menuItems = allItems.filter(i => i.category === category);
         }
 
         // Build list of extra toppings
@@ -3248,7 +3577,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     container.querySelectorAll('.pos-size-picker').forEach(p => p.classList.add('hidden'));
                     card.querySelector('.pos-size-picker').classList.remove('hidden');
                 } else {
-                    const product = MENU_ITEMS.find(i => i.id === productId);
+                    const product = getMenuItems().find(i => i.id === productId);
                     addToPOSCart(productId, '', product.price);
                 }
             });
@@ -3291,7 +3620,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeof productId === 'string' && productId.startsWith('t')) {
             product = EXTRA_TOPPINGS.find(t => t.id === productId);
         } else {
-            product = MENU_ITEMS.find(i => i.id === productId);
+            product = getMenuItems().find(i => i.id === productId);
         }
         if (!product) return;
         const finalPrice = price !== null ? price : product.price;
@@ -3317,6 +3646,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // Reset discount display
             const discountDisplay = $('pos-discount-display');
             if (discountDisplay) discountDisplay.classList.add('hidden');
+            // Reset delivery display
+            const deliveryDisplay = $('pos-delivery-display');
+            if (deliveryDisplay) deliveryDisplay.classList.add('hidden');
             // Reset cash fields
             const cashInput = $('pos-cash-received');
             if (cashInput) cashInput.value = '';
@@ -3345,7 +3677,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
         const discountAmount = subtotal * (posDiscountPercent / 100);
         const subtotalAfterDiscount = subtotal - discountAmount;
-        const totalWithTip = subtotalAfterDiscount + posTipAmount;
+        const totalWithTip = subtotalAfterDiscount + posTipAmount + posDeliveryAmount;
         $('pos-subtotal').textContent = '$' + subtotal.toFixed(2);
         $('pos-total').textContent = '$' + totalWithTip.toFixed(2);
 
@@ -3357,6 +3689,17 @@ document.addEventListener('DOMContentLoaded', function() {
             $('pos-discount-value').textContent = '-$' + discountAmount.toFixed(2);
         } else {
             discountDisplay.classList.add('hidden');
+        }
+
+        // Update delivery display
+        const deliveryDisplay = $('pos-delivery-display');
+        if (deliveryDisplay) {
+            if (posDeliveryAmount > 0) {
+                deliveryDisplay.classList.remove('hidden');
+                $('pos-delivery-value').textContent = '$' + posDeliveryAmount.toFixed(2);
+            } else {
+                deliveryDisplay.classList.add('hidden');
+            }
         }
 
         // Bind qty buttons
@@ -3387,6 +3730,40 @@ document.addEventListener('DOMContentLoaded', function() {
             const change = received - totalWithTip;
             $('pos-change-amount').textContent = change >= 0 ? '$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
         }
+    }
+
+    // ========== UPSERT CUSTOMER (Usuarios) ==========
+    async function upsertCustomer(phone, name, orderTotal, source, address) {
+        if (!phone || typeof db === 'undefined') return;
+        const cleanPhone = phone.replace(/[^+\d]/g, '');
+        if (cleanPhone.length < 6) return;
+        const ref = db.collection('customers').doc(cleanPhone);
+        try {
+            const snap = await ref.get();
+            if (snap.exists) {
+                const data = snap.data();
+                const updates = {
+                    totalOrders: (data.totalOrders || 0) + 1,
+                    totalSpent: Math.round(((data.totalSpent || 0) + orderTotal) * 100) / 100,
+                    lastOrderDate: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                if (name && name !== 'Invitado' && name !== data.name) updates.name = name;
+                if (address && address !== data.address) updates.address = address;
+                if (source && data.source !== source && data.source !== 'both') updates.source = 'both';
+                await ref.update(updates);
+            } else {
+                await ref.set({
+                    phone: cleanPhone,
+                    name: (name && name !== 'Invitado') ? name : '',
+                    address: address || '',
+                    totalOrders: 1,
+                    totalSpent: Math.round(orderTotal * 100) / 100,
+                    lastOrderDate: firebase.firestore.FieldValue.serverTimestamp(),
+                    firstSeen: firebase.firestore.FieldValue.serverTimestamp(),
+                    source: source || 'pos'
+                });
+            }
+        } catch (e) { console.error('upsertCustomer error:', e); }
     }
 
     // Busca cliente por teléfono en la colección de pedidos
@@ -3468,14 +3845,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
         const discountAmount = subtotal * (posDiscountPercent / 100);
         const subtotalAfterDiscount = subtotal - discountAmount;
-        const total = subtotalAfterDiscount + posTipAmount;
+        const total = subtotalAfterDiscount + posTipAmount + posDeliveryAmount;
 
+        const deliveryNote = $('pos-delivery-note') ? $('pos-delivery-note').value.trim() : '';
         const sale = {
             items: posCart.map(i => ({ name: i.name, emoji: i.emoji, qty: i.qty, price: i.price, size: i.size || '', total: i.price * i.qty })),
             subtotal,
             discount: posDiscountPercent,
             discountAmount: discountAmount,
             tip: posTipAmount,
+            delivery: posDeliveryAmount,
+            deliveryNote: deliveryNote,
             total,
             paymentMethod: posPaymentMethod,
             paymentDetails: getPOSPaymentDetails(),
@@ -3487,13 +3867,21 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         db.collection('sales').add(sale).then(() => {
+            // Auto-decrement inventory
+            decrementInventoryOnSale(sale.items);
+            // Upsert customer record
+            if (sale.customerPhone) {
+                upsertCustomer(sale.customerPhone, sale.customerName, total, 'pos');
+            }
             const discMsg = posDiscountPercent > 0 ? ` -${posDiscountPercent}%` : '';
             const tipMsg = posTipAmount > 0 ? ` + propina $${posTipAmount.toFixed(2)}` : '';
-            showToast(`Venta registrada: $${total.toFixed(2)} (${posPaymentMethod}${discMsg}${tipMsg})`, 'success');
+            const delMsg = posDeliveryAmount > 0 ? ` + delivery $${posDeliveryAmount.toFixed(2)}` : '';
+            showToast(`Venta registrada: $${total.toFixed(2)} (${posPaymentMethod}${discMsg}${tipMsg}${delMsg})`, 'success');
             playCashRegisterSound();
             posCart = [];
             posTipAmount = 0;
             posDiscountPercent = 0;
+            posDeliveryAmount = 0;
             document.querySelectorAll('.pos-tip-btn').forEach(b => b.classList.remove('active'));
             document.querySelector('.pos-tip-btn[data-tip="0"]').classList.add('active');
             $('pos-tip-custom').classList.add('hidden');
@@ -3502,6 +3890,11 @@ document.addEventListener('DOMContentLoaded', function() {
             document.querySelector('.pos-discount-btn[data-discount="0"]').classList.add('active');
             $('pos-discount-custom').classList.add('hidden');
             if ($('pos-discount-amount')) $('pos-discount-amount').value = '';
+            // Reset delivery
+            if ($('pos-delivery-toggle')) $('pos-delivery-toggle').checked = false;
+            $('pos-delivery-fields').classList.add('hidden');
+            if ($('pos-delivery-amount')) $('pos-delivery-amount').value = '';
+            if ($('pos-delivery-note')) $('pos-delivery-note').value = '';
             renderPOSInvoice();
             const cashInput = $('pos-cash-received');
             if (cashInput) { cashInput.value = ''; $('pos-change-amount').textContent = '$0.00'; }
@@ -3634,7 +4027,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // EXPENSES (GASTOS)
     // ========================================
-    let expenseImageBase64 = '';
+    // expenseImageBase64 hoisted above (hoisting fix)
 
     function initExpenses() {
         // Set default date to today
@@ -3797,8 +4190,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // DASHBOARD FINANCIERO
     // ========================================
-    let dashRangeMode = 'day'; // day, week, month, custom
-    let dashRefDate = new Date(); // reference date for navigation
+    // dashRangeMode, dashRefDate hoisted above (hoisting fix)
 
     function initDashboard() {
         dashRefDate = new Date();
@@ -4065,33 +4457,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // RRHH - Recursos Humanos
     // ========================================
-    const RRHH_PERMISSIONS = [
-        { key: 'gestionar_usuarios', label: 'Gestionar Usuarios', icon: 'fa-users-cog' },
-        { key: 'gestionar_roles', label: 'Gestionar Roles', icon: 'fa-user-shield' },
-        { key: 'ver_reportes', label: 'Ver Reportes', icon: 'fa-chart-bar' },
-        { key: 'registrar_asistencia', label: 'Registrar Asistencia', icon: 'fa-fingerprint' },
-        { key: 'ver_asistencia', label: 'Ver Asistencia', icon: 'fa-clipboard-list' },
-        { key: 'editar_colaboradores', label: 'Editar Colaboradores', icon: 'fa-user-edit' }
-    ];
-    const DEFAULT_ROLES = [
-        { name: 'Administrador', color: '#7b2d8e', permissions: ['gestionar_usuarios','gestionar_roles','ver_reportes','registrar_asistencia','ver_asistencia','editar_colaboradores'], isDefault: true },
-        { name: 'Supervisor', color: '#5bc0de', permissions: ['gestionar_usuarios','ver_reportes','registrar_asistencia','ver_asistencia'], isDefault: true },
-        { name: 'Colaborador', color: '#5cb85c', permissions: ['registrar_asistencia'], isDefault: true }
-    ];
-    let rrhhRoles = [];
-    let rrhhCollaborators = [];
-    let rrhhEditingRoleId = null;
-    let rrhhEditingCollabId = null;
-    let rrhhClockInterval = null;
-    let rrhhCameraStream = null;
-    let rrhhCameraMode = null;
-    let rrhhCameraTargetId = null;
-    let rrhhReportRange = 'today';
-    // Attendance standalone state
-    let attScanStream = null;
-    let attScanType = 'entrada';
-    let attClockInterval = null;
-    let attScanClockInterval = null;
+    // RRHH_PERMISSIONS, DEFAULT_ROLES & state variables hoisted above (hoisting fix)
 
     function initRRHH() {
         seedDefaultRoles();
@@ -4707,8 +5073,10 @@ document.addEventListener('DOMContentLoaded', function() {
         attClockInterval = setInterval(updateAttClock, 1000);
     }
     function stopAttClock() {
-        if (attClockInterval) { clearInterval(attClockInterval); attClockInterval = null; }
-        if (attScanClockInterval) { clearInterval(attScanClockInterval); attScanClockInterval = null; }
+        try {
+            if (attClockInterval) { clearInterval(attClockInterval); attClockInterval = null; }
+            if (attScanClockInterval) { clearInterval(attScanClockInterval); attScanClockInterval = null; }
+        } catch(e) { /* variable not yet initialized */ }
     }
     function updateAttClock() {
         const now = new Date();
@@ -5060,7 +5428,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             ordersSnap.forEach(doc => {
                 const d = doc.data();
-                if (d.status === 'cancelado') return;
+                if (d.status === 'cancelado' && !d.voided) return;
                 factInvoices.push({
                     id: doc.id,
                     type: 'order',
@@ -5077,6 +5445,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: d.paymentMethod || 'efectivo',
                     paymentDetails: d.paymentDetails || {},
                     status: d.status || 'pendiente',
+                    voided: d.voided || false,
+                    voidReason: d.voidReason || '',
+                    voidedAt: d.voidedAt ? d.voidedAt.toDate() : null,
                     date: d.createdAt ? d.createdAt.toDate() : new Date()
                 });
             });
@@ -5089,7 +5460,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     number: 'POS-' + doc.id.substring(0, 6).toUpperCase(),
                     items: d.items || [],
                     subtotal: d.subtotal || 0,
-                    delivery: 0,
+                    delivery: d.delivery || 0,
+                    deliveryNote: d.deliveryNote || '',
                     tip: d.tip || 0,
                     discount: d.discountAmount || 0,
                     discountPct: d.discount || 0,
@@ -5099,6 +5471,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: d.paymentMethod || 'efectivo',
                     paymentDetails: d.paymentDetails || {},
                     status: 'completado',
+                    voided: d.voided || false,
+                    voidReason: d.voidReason || '',
+                    voidedAt: d.voidedAt ? d.voidedAt.toDate() : null,
                     date: d.createdAt ? d.createdAt.toDate() : new Date()
                 });
             });
@@ -5126,8 +5501,10 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const totalSales = factInvoices.reduce((s, inv) => s + inv.total, 0);
-        const avg = totalSales / factInvoices.length;
+        // Exclude voided invoices from totals
+        const activeInvoices = factInvoices.filter(inv => !inv.voided);
+        const totalSales = activeInvoices.reduce((s, inv) => s + inv.total, 0);
+        const avg = activeInvoices.length ? totalSales / activeInvoices.length : 0;
 
         if (countEl) countEl.textContent = factInvoices.length;
         if (totalEl) totalEl.textContent = '$' + totalSales.toFixed(2);
@@ -5137,12 +5514,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const dateStr = inv.date.toLocaleString('es-PA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
             const itemCount = inv.items.reduce((s, i) => s + (i.qty || i.quantity || 1), 0);
             return `
-                <div class="fact-card" data-fact-idx="${idx}">
+                <div class="fact-card ${inv.voided ? 'voided' : ''}" data-fact-idx="${idx}">
                     <div class="fact-card-icon ${inv.type}">
                         <i class="fas ${inv.type === 'order' ? 'fa-shopping-bag' : 'fa-cash-register'}"></i>
                     </div>
                     <div class="fact-card-info">
-                        <div class="fact-card-title">${inv.number}</div>
+                        <div class="fact-card-title">${inv.number}${inv.voided ? ' <span class="fact-voided-badge">ANULADA</span>' : ''}</div>
                         <div class="fact-card-sub">${inv.customer} · ${itemCount} item${itemCount !== 1 ? 's' : ''}</div>
                     </div>
                     <span class="fact-card-method">${inv.method}</span>
@@ -5161,12 +5538,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    let currentInvoiceForVoid = null;
+
     function showInvoiceDetail(inv) {
         const modal = $('fact-modal');
         const titleEl = $('fact-modal-title');
         const bodyEl = $('fact-modal-body');
 
-        titleEl.textContent = inv.number;
+        currentInvoiceForVoid = inv;
+        titleEl.innerHTML = inv.number + (inv.voided ? '<span class="fact-voided-badge">ANULADA</span>' : '');
 
         const dateStr = inv.date.toLocaleString('es-PA', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -5185,7 +5565,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         let totalsHtml = '';
         if (inv.subtotal) totalsHtml += `<div class="fact-inv-total-line"><span>Subtotal</span><span>$${inv.subtotal.toFixed(2)}</span></div>`;
-        if (inv.delivery > 0) totalsHtml += `<div class="fact-inv-total-line"><span>Delivery</span><span>$${inv.delivery.toFixed(2)}</span></div>`;
+        if (inv.delivery > 0) totalsHtml += `<div class="fact-inv-total-line"><span><i class="fas fa-motorcycle" style="font-size:11px;color:var(--accent)"></i> Delivery${inv.deliveryNote ? ' <small style="color:var(--text-light)">(' + inv.deliveryNote + ')</small>' : ''}</span><span>$${inv.delivery.toFixed(2)}</span></div>`;
         if (inv.discount > 0) totalsHtml += `<div class="fact-inv-total-line"><span>Descuento${inv.discountPct ? ` (${inv.discountPct}%)` : ''}</span><span>-$${inv.discount.toFixed(2)}</span></div>`;
         if (inv.tip > 0) totalsHtml += `<div class="fact-inv-total-line"><span>Propina</span><span>$${inv.tip.toFixed(2)}</span></div>`;
         totalsHtml += `<div class="fact-inv-total-line fact-inv-total-main"><span>Total</span><span>$${inv.total.toFixed(2)}</span></div>`;
@@ -5207,6 +5587,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>`;
         }
 
+        // Voided info block
+        let voidedHtml = '';
+        if (inv.voided) {
+            const voidDate = inv.voidedAt ? inv.voidedAt.toLocaleString('es-PA', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+            voidedHtml = `<div class="fact-void-reason-block"><strong>ANULADA</strong>${voidDate ? ' — ' + voidDate : ''}<br>${inv.voidReason || 'Sin razón especificada'}</div>`;
+        }
+
         bodyEl.innerHTML = `
             <div class="fact-inv-header">
                 <div class="fact-inv-logo">XAZAI</div>
@@ -5219,10 +5606,68 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="fact-inv-totals">${totalsHtml}</div>
             <div style="font-size:11px;color:var(--text-light);margin-top:8px"><strong>Método de pago:</strong> ${inv.method}</div>
             ${paymentDetailsHtml}
+            ${voidedHtml}
             <div class="fact-inv-footer">¡Gracias por tu compra! 💜<br>XAZAI - Açai Bar & Smoothies</div>
         `;
 
+        // Hide/show void button based on whether already voided
+        const voidBtn = $('fact-void-btn');
+        if (voidBtn) {
+            if (inv.voided) {
+                voidBtn.classList.add('disabled');
+                voidBtn.innerHTML = '<i class="fas fa-ban"></i> Ya Anulada';
+            } else {
+                voidBtn.classList.remove('disabled');
+                voidBtn.innerHTML = '<i class="fas fa-ban"></i> Anular Factura';
+            }
+        }
+
         modal.classList.remove('hidden');
+    }
+
+    // Void invoice button handler
+    document.addEventListener('click', (e) => {
+        // Open void modal
+        if (e.target.closest('#fact-void-btn') && currentInvoiceForVoid && !currentInvoiceForVoid.voided) {
+            $('fact-void-reason').value = '';
+            $('fact-void-error').style.display = 'none';
+            $('fact-void-modal').classList.remove('hidden');
+        }
+        // Close void modal
+        if (e.target.closest('#fact-void-modal-close') || e.target.closest('#fact-void-cancel-btn')) {
+            $('fact-void-modal').classList.add('hidden');
+        }
+        // Confirm void
+        if (e.target.closest('#fact-void-confirm-btn')) {
+            const reason = ($('fact-void-reason').value || '').trim();
+            if (!reason) {
+                $('fact-void-error').style.display = 'block';
+                return;
+            }
+            $('fact-void-error').style.display = 'none';
+            voidInvoice(currentInvoiceForVoid, reason);
+        }
+    });
+
+    function voidInvoice(inv, reason) {
+        if (!inv || !inv.id) return;
+        const collection = inv.type === 'order' ? 'orders' : 'sales';
+        db.collection(collection).doc(inv.id).update({
+            voided: true,
+            voidReason: reason,
+            voidedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            inv.voided = true;
+            inv.voidReason = reason;
+            inv.voidedAt = new Date();
+            showToast('Factura anulada correctamente', 'success');
+            $('fact-void-modal').classList.add('hidden');
+            $('fact-modal').classList.add('hidden');
+            renderFacturas();
+        }).catch(err => {
+            console.error('Error anulando factura:', err);
+            showToast('Error al anular factura', 'warning');
+        });
     }
 
     // Wire up facturacion section switching
@@ -5527,15 +5972,311 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ========================================
+    // USUARIOS — Customer Management
+    // ========================================
+    let customersCache = [];
+    let currentCustomerSort = 'recent';
+
+    async function loadCustomers() {
+        if (typeof db === 'undefined') return;
+        const container = $('usr-list-container');
+        if (container) container.innerHTML = '<div class="usr-loading"><i class="fas fa-spinner fa-spin"></i> Cargando clientes...</div>';
+        try {
+            const snap = await db.collection('customers').orderBy('lastOrderDate', 'desc').get();
+            customersCache = [];
+            snap.forEach(doc => customersCache.push({ id: doc.id, ...doc.data() }));
+            renderCustomerList();
+            updateCustomerStats();
+        } catch (e) {
+            console.error('loadCustomers error:', e);
+            if (container) container.innerHTML = '<div class="usr-empty"><i class="fas fa-exclamation-triangle"></i><p>Error cargando clientes</p></div>';
+        }
+    }
+
+    function updateCustomerStats() {
+        const totalEl = $('usr-stat-total');
+        const activeEl = $('usr-stat-active');
+        const revenueEl = $('usr-stat-revenue');
+        if (!totalEl) return;
+        totalEl.textContent = customersCache.length;
+
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const active = customersCache.filter(c => {
+            if (!c.lastOrderDate) return false;
+            const d = c.lastOrderDate.toDate ? c.lastOrderDate.toDate() : new Date(c.lastOrderDate);
+            return d >= thirtyDaysAgo;
+        }).length;
+        activeEl.textContent = active;
+
+        const totalRevenue = customersCache.reduce((s, c) => s + (c.totalSpent || 0), 0);
+        revenueEl.textContent = '$' + totalRevenue.toFixed(2);
+    }
+
+    function renderCustomerList() {
+        const container = $('usr-list-container');
+        if (!container) return;
+        const searchVal = ($('usr-search') ? $('usr-search').value.trim().toLowerCase() : '');
+
+        let filtered = customersCache;
+        if (searchVal) {
+            filtered = customersCache.filter(c =>
+                (c.name && c.name.toLowerCase().includes(searchVal)) ||
+                (c.phone && c.phone.includes(searchVal))
+            );
+        }
+
+        // Sort
+        const sorted = [...filtered];
+        if (currentCustomerSort === 'recent') {
+            sorted.sort((a, b) => {
+                const da = a.lastOrderDate ? (a.lastOrderDate.toDate ? a.lastOrderDate.toDate() : new Date(a.lastOrderDate)) : new Date(0);
+                const db2 = b.lastOrderDate ? (b.lastOrderDate.toDate ? b.lastOrderDate.toDate() : new Date(b.lastOrderDate)) : new Date(0);
+                return db2 - da;
+            });
+        } else if (currentCustomerSort === 'spent') {
+            sorted.sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0));
+        } else if (currentCustomerSort === 'orders') {
+            sorted.sort((a, b) => (b.totalOrders || 0) - (a.totalOrders || 0));
+        }
+
+        if (sorted.length === 0) {
+            container.innerHTML = '<div class="usr-empty"><i class="fas fa-user-friends"></i><p>' +
+                (searchVal ? 'No se encontraron resultados' : 'No hay clientes registrados aún') + '</p></div>';
+            return;
+        }
+
+        container.innerHTML = sorted.map(c => {
+            const initials = getCustomerInitials(c.name, c.phone);
+            const name = c.name || 'Sin nombre';
+            const phone = c.phone || '';
+            const orders = c.totalOrders || 0;
+            const spent = (c.totalSpent || 0).toFixed(2);
+            const lastDate = c.lastOrderDate
+                ? formatRelativeDate(c.lastOrderDate.toDate ? c.lastOrderDate.toDate() : new Date(c.lastOrderDate))
+                : 'N/A';
+            const sourceClass = c.source || 'pos';
+            const sourceLabel = c.source === 'both' ? 'Ambos' : (c.source === 'online' ? 'Online' : 'POS');
+            return `<div class="usr-card" data-phone="${phone}">
+                <div class="usr-avatar">${initials}</div>
+                <div class="usr-card-info">
+                    <div class="usr-card-name">${name} <span class="usr-source-badge ${sourceClass}">${sourceLabel}</span></div>
+                    <div class="usr-card-phone"><i class="fas fa-phone"></i> ${phone}</div>
+                    <div class="usr-card-meta">
+                        <span><i class="fas fa-shopping-bag"></i> ${orders} pedidos</span>
+                        <span><i class="fas fa-dollar-sign"></i> $${spent}</span>
+                        <span><i class="fas fa-clock"></i> ${lastDate}</span>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right usr-card-arrow"></i>
+            </div>`;
+        }).join('');
+    }
+
+    function getCustomerInitials(name, phone) {
+        if (name && name !== 'Sin nombre') {
+            const parts = name.trim().split(/\s+/);
+            if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+            return name.substring(0, 2).toUpperCase();
+        }
+        return phone ? phone.slice(-2) : '??';
+    }
+
+    function formatRelativeDate(date) {
+        const now = new Date();
+        const diff = now - date;
+        const mins = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+        if (mins < 60) return 'Hace ' + mins + ' min';
+        if (hours < 24) return 'Hace ' + hours + 'h';
+        if (days < 7) return 'Hace ' + days + 'd';
+        if (days < 30) return 'Hace ' + Math.floor(days / 7) + ' sem';
+        return date.toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    async function openCustomerDetail(phone) {
+        if (!phone) return;
+        const listView = $('usr-list-view');
+        const detailView = $('usr-detail-view');
+        if (!listView || !detailView) return;
+        listView.classList.add('hidden');
+        detailView.classList.remove('hidden');
+
+        // Find customer from cache
+        const customer = customersCache.find(c => c.phone === phone || c.id === phone) || { phone, name: '', totalOrders: 0, totalSpent: 0 };
+
+        // Render profile
+        const profileEl = $('usr-profile');
+        const initials = getCustomerInitials(customer.name, customer.phone);
+        const addrHtml = customer.address ? `<div class="usr-profile-address"><i class="fas fa-map-marker-alt"></i> ${customer.address}</div>` : '';
+        profileEl.innerHTML = `
+            <div class="usr-profile-avatar">${initials}</div>
+            <div class="usr-profile-info">
+                <div class="usr-profile-name">${customer.name || 'Sin nombre'}</div>
+                <div class="usr-profile-phone"><i class="fas fa-phone"></i> ${customer.phone}</div>
+                ${addrHtml}
+            </div>`;
+
+        // Render stats
+        const statsEl = $('usr-detail-stats');
+        const avgTicket = customer.totalOrders > 0 ? (customer.totalSpent / customer.totalOrders).toFixed(2) : '0.00';
+        const firstSeen = customer.firstSeen
+            ? (customer.firstSeen.toDate ? customer.firstSeen.toDate() : new Date(customer.firstSeen)).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'N/A';
+        statsEl.innerHTML = `
+            <div class="usr-d-stat">
+                <div class="usr-d-stat-icon orders"><i class="fas fa-shopping-bag"></i></div>
+                <span class="usr-d-stat-value">${customer.totalOrders || 0}</span>
+                <span class="usr-d-stat-label">Pedidos</span>
+            </div>
+            <div class="usr-d-stat">
+                <div class="usr-d-stat-icon spent"><i class="fas fa-dollar-sign"></i></div>
+                <span class="usr-d-stat-value">$${(customer.totalSpent || 0).toFixed(2)}</span>
+                <span class="usr-d-stat-label">Gastado</span>
+            </div>
+            <div class="usr-d-stat">
+                <div class="usr-d-stat-icon avg"><i class="fas fa-receipt"></i></div>
+                <span class="usr-d-stat-value">$${avgTicket}</span>
+                <span class="usr-d-stat-label">Ticket Prom.</span>
+            </div>
+            <div class="usr-d-stat">
+                <div class="usr-d-stat-icon first"><i class="fas fa-calendar-alt"></i></div>
+                <span class="usr-d-stat-value" style="font-size:13px">${firstSeen}</span>
+                <span class="usr-d-stat-label">Primera Visita</span>
+            </div>`;
+
+        // Load transactions (orders + sales)
+        const timelineEl = $('usr-timeline');
+        timelineEl.innerHTML = '<p class="usr-loading"><i class="fas fa-spinner fa-spin"></i> Cargando historial...</p>';
+
+        try {
+            const transactions = [];
+
+            // Fetch from orders
+            const ordersSnap = await db.collection('orders')
+                .where('customerPhone', '==', phone)
+                .limit(50)
+                .get();
+            ordersSnap.forEach(doc => {
+                const d = doc.data();
+                transactions.push({
+                    id: d.number || doc.id,
+                    type: 'online',
+                    total: d.total || 0,
+                    items: d.items || [],
+                    paymentMethod: d.paymentMethod || '',
+                    status: d.status || '',
+                    createdAt: d.createdAt,
+                    tip: d.tip || 0,
+                    delivery: d.delivery || 0
+                });
+            });
+
+            // Fetch from sales
+            const salesSnap = await db.collection('sales')
+                .where('customerPhone', '==', phone)
+                .limit(50)
+                .get();
+            salesSnap.forEach(doc => {
+                const d = doc.data();
+                transactions.push({
+                    id: 'POS-' + doc.id.substring(0, 5).toUpperCase(),
+                    type: 'pos',
+                    total: d.total || 0,
+                    items: d.items || [],
+                    paymentMethod: d.paymentMethod || '',
+                    status: 'completado',
+                    createdAt: d.createdAt,
+                    tip: d.tip || 0,
+                    delivery: d.delivery || 0
+                });
+            });
+
+            // Sort by date desc
+            transactions.sort((a, b) => {
+                const da = a.createdAt ? (a.createdAt.toDate ? a.createdAt.toDate() : new Date(a.createdAt)) : new Date(0);
+                const db2 = b.createdAt ? (b.createdAt.toDate ? b.createdAt.toDate() : new Date(b.createdAt)) : new Date(0);
+                return db2 - da;
+            });
+
+            renderCustomerTimeline(transactions);
+        } catch (e) {
+            console.error('Error loading customer transactions:', e);
+            timelineEl.innerHTML = '<div class="usr-no-history"><i class="fas fa-exclamation-triangle"></i><p>Error cargando historial</p></div>';
+        }
+    }
+
+    function renderCustomerTimeline(transactions) {
+        const el = $('usr-timeline');
+        if (!el) return;
+        if (transactions.length === 0) {
+            el.innerHTML = '<div class="usr-no-history"><i class="fas fa-inbox"></i><p>No hay transacciones registradas</p></div>';
+            return;
+        }
+        el.innerHTML = transactions.map(t => {
+            const date = t.createdAt
+                ? (t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt)).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : 'Fecha desconocida';
+            const icon = t.type === 'online' ? 'fa-globe' : 'fa-cash-register';
+            const itemsSummary = t.items.map(i => `${i.emoji || ''} ${i.name}`).join(', ');
+            const tipStr = t.tip > 0 ? ` + propina $${t.tip.toFixed(2)}` : '';
+            const delStr = t.delivery > 0 ? ` + delivery $${t.delivery.toFixed(2)}` : '';
+            return `<div class="usr-timeline-item">
+                <div class="usr-tl-icon ${t.type}"><i class="fas ${icon}"></i></div>
+                <div class="usr-tl-body">
+                    <div class="usr-tl-top">
+                        <span class="usr-tl-id">${t.id}</span>
+                        <span class="usr-tl-amount">$${t.total.toFixed(2)}</span>
+                    </div>
+                    <div class="usr-tl-date">${date}${tipStr}${delStr} <span class="usr-tl-method">${t.paymentMethod}</span></div>
+                    <div class="usr-tl-items">${itemsSummary || 'Sin detalle'}</div>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function closeCustomerDetail() {
+        const listView = $('usr-list-view');
+        const detailView = $('usr-detail-view');
+        if (listView) listView.classList.remove('hidden');
+        if (detailView) detailView.classList.add('hidden');
+    }
+
+    // Usuarios event listeners
+    document.addEventListener('click', (e) => {
+        const card = e.target.closest('.usr-card');
+        if (card) {
+            const phone = card.dataset.phone;
+            if (phone) openCustomerDetail(phone);
+            return;
+        }
+        if (e.target.closest('#usr-back-btn')) {
+            closeCustomerDetail();
+            return;
+        }
+        const sortBtn = e.target.closest('.usr-sort-btn');
+        if (sortBtn) {
+            document.querySelectorAll('.usr-sort-btn').forEach(b => b.classList.remove('active'));
+            sortBtn.classList.add('active');
+            currentCustomerSort = sortBtn.dataset.sort;
+            renderCustomerList();
+        }
+    });
+
+    const usrSearchInput = $('usr-search');
+    if (usrSearchInput) {
+        let usrSearchTimeout;
+        usrSearchInput.addEventListener('input', () => {
+            clearTimeout(usrSearchTimeout);
+            usrSearchTimeout = setTimeout(() => renderCustomerList(), 250);
+        });
+    }
+
+    // ========================================
     // MESAS — Table Management
     // ========================================
-    let mesasData = [];
-    let mesasUnsubscribe = null;
-    let currentMesa = null;
-    let currentDinerIdx = 0;
-    let mesaPayTip = 0;
-    let mesaPayMethod = 'efectivo';
-    let mesaPayDinerIdx = null; // null = pagar toda la mesa
+    // Mesa state variables declared above near ordersUnsubscribe (hoisting fix)
 
     function initMesas() {
         if (mesasUnsubscribe) {
@@ -5769,7 +6510,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
         catContainer.innerHTML = `<button class="pos-cat-btn ${catFilter === 'all' ? 'active' : ''}" data-mesa-cat="all">Todos</button>` +
-            cats.map(k => `<button class="pos-cat-btn ${catFilter === k ? 'active' : ''}" data-mesa-cat="${k}"><i class="fas ${CATEGORIES[k].icon}"></i> ${CATEGORIES[k].name}</button>`).join('');
+            cats.map(k => `<button class="pos-cat-btn ${catFilter === k ? 'active' : ''}" data-mesa-cat="${k}"><i class="fas ${CATEGORIES[k].icon}"></i> ${CATEGORIES[k].name}</button>`).join('') +
+            `<button class="pos-cat-btn ${catFilter === 'extras' ? 'active' : ''}" data-mesa-cat="extras"><i class="fas fa-plus-circle"></i> Extras</button>` +
+            `<button class="pos-cat-btn ${catFilter === 'arma-tu-bowl' ? 'active' : ''}" data-mesa-cat="arma-tu-bowl"><i class="fas fa-wand-magic-sparkles"></i> Arma tu Bowl</button>`;
 
         catContainer.querySelectorAll('.pos-cat-btn').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -5779,8 +6522,15 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         });
 
-        const items = catFilter === 'all' ? MENU_ITEMS : MENU_ITEMS.filter(i => i.category === catFilter);
-        grid.innerHTML = items.map(item => {
+        // Bowl builder for mesas
+        if (catFilter === 'arma-tu-bowl') {
+            renderMesaBowlBuilder(grid);
+            return;
+        }
+
+        const allMenuItems = getMenuItems();
+        const items = catFilter === 'extras' ? [] : (catFilter === 'all' ? allMenuItems : allMenuItems.filter(i => i.category === catFilter));
+        let html = items.map(item => {
             const hasSizes = item.priceGrande != null && !item.onlyGrande;
             return `
             <div class="pos-product-card" data-mesa-product-id="${item.id}" data-has-sizes="${hasSizes}">
@@ -5796,7 +6546,24 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>`;
         }).join('');
 
-        grid.querySelectorAll('.pos-product-card').forEach(card => {
+        // Add extras/toppings
+        const showExtras = catFilter === 'extras' || catFilter === 'all';
+        if (showExtras && typeof EXTRA_TOPPINGS !== 'undefined') {
+            if (items.length > 0) {
+                html += `<div class="pos-extras-divider">Extras / Toppings</div>`;
+            }
+            html += EXTRA_TOPPINGS.map(item => `
+                <div class="pos-product-card pos-extra-card" data-mesa-extra-id="${item.id}">
+                    <span class="pos-product-emoji">${item.emoji}</span>
+                    <span class="pos-product-name">${item.name}</span>
+                    <span class="pos-product-price">$${item.price.toFixed(2)}</span>
+                </div>
+            `).join('');
+        }
+
+        grid.innerHTML = html;
+
+        grid.querySelectorAll('.pos-product-card:not(.pos-extra-card)').forEach(card => {
             card.addEventListener('click', (e) => {
                 if (e.target.closest('.pos-size-picker')) return;
                 if (!currentMesa || currentMesa.status === 'libre') { showToast('Abre la mesa primero', 'warning'); return; }
@@ -5807,8 +6574,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     const picker = card.querySelector('.pos-size-picker');
                     if (picker) picker.classList.remove('hidden');
                 } else {
-                    const item = MENU_ITEMS.find(i => String(i.id) === String(productId));
+                    const item = getMenuItems().find(i => String(i.id) === String(productId));
                     if (item) addItemToCurrentDiner(item, null, item.price);
+                }
+            });
+        });
+
+        // Extra/topping click handlers for mesas
+        grid.querySelectorAll('.pos-extra-card').forEach(card => {
+            card.addEventListener('click', () => {
+                if (!currentMesa || currentMesa.status === 'libre') { showToast('Abre la mesa primero', 'warning'); return; }
+                const extraId = card.dataset.mesaExtraId;
+                const extra = EXTRA_TOPPINGS.find(t => t.id === extraId);
+                if (extra) {
+                    addItemToCurrentDiner({ id: extraId, name: extra.name, emoji: extra.emoji, price: extra.price }, null, extra.price);
                 }
             });
         });
@@ -5818,7 +6597,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.stopPropagation();
                 const picker = btn.closest('.pos-size-picker');
                 const productId = picker.dataset.mesaProductId;
-                const item = MENU_ITEMS.find(i => String(i.id) === String(productId));
+                const item = getMenuItems().find(i => String(i.id) === String(productId));
                 if (item) addItemToCurrentDiner(item, btn.dataset.size, parseFloat(btn.dataset.price));
                 picker.classList.add('hidden');
             });
@@ -5827,6 +6606,114 @@ document.addEventListener('DOMContentLoaded', function() {
         grid.querySelectorAll('.pos-size-close').forEach(btn => {
             btn.addEventListener('click', (e) => { e.stopPropagation(); btn.closest('.pos-size-picker').classList.add('hidden'); });
         });
+    }
+
+    // ---- ARMA TU BOWL EN MESAS ----
+    let mesaBowl = { base: null, protein: null, toppings: [], dressing: null };
+
+    function renderMesaBowlBuilder(grid) {
+        mesaBowl = { base: null, protein: null, toppings: [], dressing: null };
+
+        function optBtn(opt, type) {
+            return `<button class="mesa-bowl-opt" data-type="${type}" data-id="${opt.id}" data-price="${opt.price}" data-name="${opt.name}">
+                <span class="mesa-bowl-opt-emoji">${opt.emoji}</span>
+                <span class="mesa-bowl-opt-name">${opt.name}</span>
+                <span class="mesa-bowl-opt-price">+$${opt.price.toFixed(2)}</span>
+            </button>`;
+        }
+
+        grid.innerHTML = `
+            <div class="mesa-bowl-builder">
+                <div class="mesa-bowl-step">
+                    <h4><span class="mesa-bowl-step-num">1</span> Base</h4>
+                    <div class="mesa-bowl-options" data-step="base">${BUILD_OPTIONS.bases.map(o => optBtn(o, 'base')).join('')}</div>
+                </div>
+                <div class="mesa-bowl-step">
+                    <h4><span class="mesa-bowl-step-num">2</span> Textura</h4>
+                    <div class="mesa-bowl-options" data-step="protein">${BUILD_OPTIONS.proteins.map(o => optBtn(o, 'protein')).join('')}</div>
+                </div>
+                <div class="mesa-bowl-step">
+                    <h4><span class="mesa-bowl-step-num">3</span> Toppings <small>(máx 4)</small></h4>
+                    <div class="mesa-bowl-options" data-step="topping">${BUILD_OPTIONS.toppings.map(o => optBtn(o, 'topping')).join('')}</div>
+                </div>
+                <div class="mesa-bowl-step">
+                    <h4><span class="mesa-bowl-step-num">4</span> Drizzle</h4>
+                    <div class="mesa-bowl-options" data-step="dressing">${BUILD_OPTIONS.dressings.map(o => optBtn(o, 'dressing')).join('')}</div>
+                </div>
+                <div class="mesa-bowl-summary">
+                    <div class="mesa-bowl-summary-lines" id="mesa-bowl-summary-lines"><p style="color:var(--text-light);font-size:12px">Selecciona los ingredientes</p></div>
+                    <div class="mesa-bowl-summary-total"><span>Total:</span><span id="mesa-bowl-total">$0.00</span></div>
+                    <button class="mesa-bowl-add-btn" id="mesa-bowl-add-btn" disabled><i class="fas fa-plus"></i> Agregar Bowl al Comensal</button>
+                </div>
+            </div>`;
+
+        // Option click handlers
+        grid.querySelectorAll('.mesa-bowl-opt').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (!currentMesa || currentMesa.status === 'libre') { showToast('Abre la mesa primero', 'warning'); return; }
+                const { type, id, price, name } = btn.dataset;
+                const priceNum = parseFloat(price);
+
+                if (type === 'topping') {
+                    if (btn.classList.contains('selected')) {
+                        btn.classList.remove('selected');
+                        mesaBowl.toppings = mesaBowl.toppings.filter(t => t.id !== id);
+                    } else if (mesaBowl.toppings.length < 4) {
+                        btn.classList.add('selected');
+                        mesaBowl.toppings.push({ id, name, price: priceNum });
+                    } else {
+                        showToast('Máximo 4 toppings', 'warning');
+                    }
+                } else {
+                    btn.closest('.mesa-bowl-options').querySelectorAll('.mesa-bowl-opt').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    mesaBowl[type] = { id, name, price: priceNum };
+                }
+                updateMesaBowlSummary();
+            });
+        });
+
+        // Add bowl button
+        const addBtn = grid.querySelector('#mesa-bowl-add-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                if (!mesaBowl.base || !mesaBowl.protein || !mesaBowl.dressing) return;
+                if (!currentMesa || currentMesa.status === 'libre') { showToast('Abre la mesa primero', 'warning'); return; }
+
+                let total = mesaBowl.base.price + mesaBowl.protein.price + mesaBowl.dressing.price;
+                total += mesaBowl.toppings.reduce((s, t) => s + t.price, 0);
+
+                const bowlItem = {
+                    id: 'custom-' + Date.now(),
+                    name: 'Bowl Personalizado',
+                    emoji: '🎨',
+                    price: total
+                };
+                addItemToCurrentDiner(bowlItem, null, total);
+                showToast('Bowl personalizado agregado', 'success');
+                // Reset
+                mesaBowl = { base: null, protein: null, toppings: [], dressing: null };
+                grid.querySelectorAll('.mesa-bowl-opt').forEach(b => b.classList.remove('selected'));
+                updateMesaBowlSummary();
+            });
+        }
+    }
+
+    function updateMesaBowlSummary() {
+        const linesEl = document.getElementById('mesa-bowl-summary-lines');
+        const totalEl = document.getElementById('mesa-bowl-total');
+        const addBtn = document.getElementById('mesa-bowl-add-btn');
+        if (!linesEl) return;
+
+        let total = 0, lines = [];
+        if (mesaBowl.base) { lines.push(`<div class="mesa-bowl-line"><span>Base: ${mesaBowl.base.name}</span><span>$${mesaBowl.base.price.toFixed(2)}</span></div>`); total += mesaBowl.base.price; }
+        if (mesaBowl.protein) { lines.push(`<div class="mesa-bowl-line"><span>Textura: ${mesaBowl.protein.name}</span><span>$${mesaBowl.protein.price.toFixed(2)}</span></div>`); total += mesaBowl.protein.price; }
+        mesaBowl.toppings.forEach(t => { lines.push(`<div class="mesa-bowl-line"><span>Topping: ${t.name}</span><span>$${t.price.toFixed(2)}</span></div>`); total += t.price; });
+        if (mesaBowl.dressing) { lines.push(`<div class="mesa-bowl-line"><span>Drizzle: ${mesaBowl.dressing.name}</span><span>$${mesaBowl.dressing.price.toFixed(2)}</span></div>`); total += mesaBowl.dressing.price; }
+
+        linesEl.innerHTML = lines.length ? lines.join('') : '<p style="color:var(--text-light);font-size:12px">Selecciona los ingredientes</p>';
+        if (totalEl) totalEl.textContent = '$' + total.toFixed(2);
+        if (addBtn) addBtn.disabled = !(mesaBowl.base && mesaBowl.protein && mesaBowl.dressing);
     }
 
     function addItemToCurrentDiner(menuItem, size, price) {
@@ -5882,74 +6769,157 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ---- PAGO ----
+    function getMesaPayingItems() {
+        const diners = currentMesa ? (currentMesa.diners || []) : [];
+        let payingItems = [];
+        if (mesaPayDinerIdx !== null) {
+            const d = diners[mesaPayDinerIdx];
+            payingItems = d ? (d.items || []) : [];
+        } else {
+            diners.forEach(d => payingItems.push(...(d.items || [])));
+        }
+        return payingItems;
+    }
+
     function openMesaPayModal(dinerIdx) {
         mesaPayDinerIdx = typeof dinerIdx === 'number' ? dinerIdx : null;
         mesaPayTip = 0;
         mesaPayMethod = 'efectivo';
+        mesaPayDiscount = 0;
 
         const diners = currentMesa.diners || [];
-        let payingItems = [];
         let payTitle = '';
         if (mesaPayDinerIdx !== null) {
             const d = diners[mesaPayDinerIdx];
-            payingItems = d ? (d.items || []) : [];
             payTitle = d ? (d.name || 'Comensal ' + (mesaPayDinerIdx + 1)) : '';
         } else {
-            diners.forEach(d => payingItems.push(...(d.items || [])));
             payTitle = 'Mesa completa';
         }
 
-        const subtotal = payingItems.reduce((s, it) => s + it.price * it.qty, 0);
+        const payingItems = getMesaPayingItems();
         $('mesa-pay-title').textContent = '— ' + payTitle;
-        $('mesa-pay-summary').innerHTML = `<div class="mesa-pay-summary-items">${payingItems.map(it => `<span>${it.emoji} ${it.name}${it.size ? '(' + it.size + ')' : ''} x${it.qty}</span><span>$${(it.price * it.qty).toFixed(2)}</span>`).join('')}</div><div class="mesa-pay-sub"><span>Subtotal</span><span>$${subtotal.toFixed(2)}</span></div>`;
-        updateMesaPayTotal();
+        $('mesa-pay-summary').innerHTML = `<div class="mesa-pay-summary-items">${payingItems.map(it => `<span>${it.emoji} ${it.name}${it.size ? '(' + it.size + ')' : ''} x${it.qty}</span><span>$${(it.price * it.qty).toFixed(2)}</span>`).join('')}</div>`;
 
-        document.querySelectorAll('.mesa-method-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.mesa-method-btn[data-method="efectivo"]').classList.add('active');
+        // Reset discount UI
+        document.querySelectorAll('.mesa-discount-btn').forEach(b => b.classList.remove('active'));
+        const discZero = document.querySelector('.mesa-discount-btn[data-discount="0"]');
+        if (discZero) discZero.classList.add('active');
+        const discCustom = $('mesa-discount-custom');
+        if (discCustom) discCustom.classList.add('hidden');
+        const discInput = $('mesa-discount-amount');
+        if (discInput) discInput.value = '';
+
+        // Reset tip UI
+        document.querySelectorAll('.mesa-tip-type-btn').forEach(b => b.classList.remove('active'));
+        const tipFixedBtn = document.querySelector('.mesa-tip-type-btn[data-mesa-tip-type="fixed"]');
+        if (tipFixedBtn) tipFixedBtn.classList.add('active');
+        const tipFixedOpts = $('mesa-tip-opts-fixed');
+        const tipPctOpts = $('mesa-tip-opts-percent');
+        if (tipFixedOpts) tipFixedOpts.classList.remove('hidden');
+        if (tipPctOpts) tipPctOpts.classList.add('hidden');
         document.querySelectorAll('.mesa-tip-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.mesa-tip-btn[data-tip="0"]').classList.add('active');
+        const tipZero = document.querySelector('.mesa-tip-btn[data-tip="0"]');
+        if (tipZero) tipZero.classList.add('active');
+        const tipCustom = $('mesa-tip-custom');
+        if (tipCustom) tipCustom.classList.add('hidden');
+        const tipInput = $('mesa-tip-amount');
+        if (tipInput) tipInput.value = '';
+        document.querySelectorAll('.mesa-tip-pct-btn').forEach(b => b.classList.remove('active'));
 
+        // Reset payment method UI
+        document.querySelectorAll('.mesa-method-btn').forEach(b => b.classList.remove('active'));
+        const effBtn = document.querySelector('.mesa-method-btn[data-method="efectivo"]');
+        if (effBtn) effBtn.classList.add('active');
+        const cashChange = $('mesa-cash-change');
+        if (cashChange) cashChange.style.display = 'block';
+        document.querySelectorAll('.mesa-payment-details').forEach(d => d.classList.add('hidden'));
+        const cashInput = $('mesa-cash-received');
+        if (cashInput) cashInput.value = '';
+        const changeEl = $('mesa-change-amount');
+        if (changeEl) { changeEl.textContent = '$0.00'; changeEl.style.color = '#00e096'; }
+        // Clear refs
+        ['mesa-tarjeta-ref', 'mesa-ach-ref', 'mesa-yappy-ref'].forEach(id => { const el = $(id); if (el) el.value = ''; });
+
+        updateMesaPayTotal();
         $('mesa-pay-modal').classList.remove('hidden');
     }
 
     function updateMesaPayTotal() {
-        const diners = currentMesa ? (currentMesa.diners || []) : [];
-        let payingItems = [];
-        if (mesaPayDinerIdx !== null) {
-            const d = diners[mesaPayDinerIdx];
-            payingItems = d ? (d.items || []) : [];
-        } else {
-            diners.forEach(d => payingItems.push(...(d.items || [])));
-        }
+        const payingItems = getMesaPayingItems();
         const subtotal = payingItems.reduce((s, it) => s + it.price * it.qty, 0);
-        const total = subtotal + mesaPayTip;
-        const el = $('mesa-pay-total');
-        if (el) el.textContent = '$' + total.toFixed(2);
+        const discountAmt = subtotal * (mesaPayDiscount / 100);
+        const afterDiscount = subtotal - discountAmt;
+        const total = afterDiscount + mesaPayTip;
+
+        // Update subtotal
+        const subEl = $('mesa-pay-subtotal');
+        if (subEl) subEl.textContent = '$' + subtotal.toFixed(2);
+
+        // Update discount line
+        const discLine = $('mesa-pay-discount-line');
+        const discPct = $('mesa-pay-discount-pct');
+        const discVal = $('mesa-pay-discount-value');
+        if (mesaPayDiscount > 0) {
+            if (discLine) discLine.classList.remove('hidden');
+            if (discPct) discPct.textContent = mesaPayDiscount;
+            if (discVal) discVal.textContent = '-$' + discountAmt.toFixed(2);
+        } else {
+            if (discLine) discLine.classList.add('hidden');
+        }
+
+        // Update tip display
+        const tipEl = $('mesa-pay-tip-display');
+        if (tipEl) tipEl.textContent = '$' + mesaPayTip.toFixed(2);
+
+        // Update total
+        const totalEl = $('mesa-pay-total');
+        if (totalEl) totalEl.textContent = '$' + total.toFixed(2);
+
+        // Update cash change if visible
+        const cashInput = $('mesa-cash-received');
+        if (cashInput && cashInput.value) {
+            const received = parseFloat(cashInput.value) || 0;
+            const change = received - total;
+            const changeEl = $('mesa-change-amount');
+            if (changeEl) {
+                changeEl.textContent = change >= 0 ? '$' + change.toFixed(2) : '-$' + Math.abs(change).toFixed(2);
+                changeEl.style.color = change >= 0 ? '#00e096' : '#ff6b6b';
+            }
+        }
     }
 
     function processMesaPayment() {
         const diners = currentMesa ? (currentMesa.diners || []) : [];
-        let payingItems = [];
-        if (mesaPayDinerIdx !== null) {
-            const d = diners[mesaPayDinerIdx];
-            payingItems = d ? (d.items || []) : [];
-        } else {
-            diners.forEach(d => payingItems.push(...(d.items || [])));
-        }
+        const payingItems = getMesaPayingItems();
         if (!payingItems.length) { showToast('No hay items para cobrar', 'warning'); return; }
 
         const subtotal = payingItems.reduce((s, it) => s + it.price * it.qty, 0);
-        const total = subtotal + mesaPayTip;
+        const discountAmt = subtotal * (mesaPayDiscount / 100);
+        const afterDiscount = subtotal - discountAmt;
+        const total = afterDiscount + mesaPayTip;
+
+        // Collect payment details
+        let paymentDetails = {};
+        if (mesaPayMethod === 'efectivo') {
+            const received = parseFloat(($('mesa-cash-received') || {}).value) || 0;
+            paymentDetails = { cashReceived: received, change: Math.max(0, received - total) };
+        } else if (mesaPayMethod === 'tarjeta') {
+            paymentDetails = { lastDigits: ($('mesa-tarjeta-ref') || {}).value || '' };
+        } else if (mesaPayMethod === 'ach') {
+            paymentDetails = { reference: ($('mesa-ach-ref') || {}).value || '' };
+        } else if (mesaPayMethod === 'yappy') {
+            paymentDetails = { reference: ($('mesa-yappy-ref') || {}).value || '' };
+        }
 
         const sale = {
             items: payingItems.map(it => ({ name: it.name, emoji: it.emoji, qty: it.qty, price: it.price, size: it.size || '', total: it.price * it.qty })),
             subtotal,
-            discount: 0,
-            discountAmount: 0,
+            discount: mesaPayDiscount,
+            discountAmount: discountAmt,
             tip: mesaPayTip,
             total,
             paymentMethod: mesaPayMethod,
-            paymentDetails: {},
+            paymentDetails,
             source: 'mesa',
             tableNumber: currentMesa.tableNumber,
             tableName: currentMesa.tableName || 'Mesa ' + currentMesa.tableNumber,
@@ -5960,19 +6930,17 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         db.collection('sales').add(sale).then(() => {
+            decrementInventoryOnSale(sale.items);
             showToast(`Pago registrado: $${total.toFixed(2)}`, 'success');
             playCashRegisterSound();
             $('mesa-pay-modal').classList.add('hidden');
 
-            // Limpiar items pagados
             if (mesaPayDinerIdx !== null) {
                 diners[mesaPayDinerIdx].items = [];
                 saveMesaDiners(diners);
-                // Si todos los comensales pagaron, cerrar mesa
                 const allEmpty = diners.every(d => !(d.items || []).length);
                 if (allEmpty) closeMesa();
             } else {
-                // Cobrar mesa completa → cerrar
                 closeMesa();
             }
         }).catch(() => showToast('Error registrando pago', 'warning'));
@@ -6117,26 +7085,485 @@ document.addEventListener('DOMContentLoaded', function() {
         const payModal = $('mesa-pay-modal');
         if (payModal) payModal.addEventListener('click', (e) => { if (e.target === payModal) payModal.classList.add('hidden'); });
 
+        // Payment method buttons
         document.querySelectorAll('.mesa-method-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.mesa-method-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 mesaPayMethod = btn.dataset.method;
+                // Toggle cash change section
+                const cashChange = $('mesa-cash-change');
+                if (cashChange) cashChange.style.display = mesaPayMethod === 'efectivo' ? 'block' : 'none';
+                // Toggle payment detail fields
+                document.querySelectorAll('.mesa-payment-details').forEach(d => d.classList.add('hidden'));
+                const detailEl = $('mesa-payment-details-' + mesaPayMethod);
+                if (detailEl) detailEl.classList.remove('hidden');
             });
         });
 
-        document.querySelectorAll('.mesa-tip-btn').forEach(btn => {
+        // Discount buttons
+        document.querySelectorAll('.mesa-discount-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.mesa-tip-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.mesa-discount-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                mesaPayTip = parseFloat(btn.dataset.tip) || 0;
+                const discVal = btn.dataset.discount;
+                if (discVal === 'custom') {
+                    $('mesa-discount-custom').classList.remove('hidden');
+                    mesaPayDiscount = parseFloat(($('mesa-discount-amount') || {}).value) || 0;
+                } else {
+                    $('mesa-discount-custom').classList.add('hidden');
+                    mesaPayDiscount = parseFloat(discVal) || 0;
+                }
+                updateMesaPayTotal();
+            });
+        });
+        const mesaDiscInput = $('mesa-discount-amount');
+        if (mesaDiscInput) {
+            mesaDiscInput.addEventListener('input', () => {
+                mesaPayDiscount = Math.min(100, Math.max(0, parseFloat(mesaDiscInput.value) || 0));
+                updateMesaPayTotal();
+            });
+        }
+
+        // Tip type toggle ($ Fijo / % Pct)
+        document.querySelectorAll('.mesa-tip-type-btn').forEach(typeBtn => {
+            typeBtn.addEventListener('click', () => {
+                document.querySelectorAll('.mesa-tip-type-btn').forEach(b => b.classList.remove('active'));
+                typeBtn.classList.add('active');
+                const mode = typeBtn.dataset.mesaTipType;
+                if (mode === 'fixed') {
+                    $('mesa-tip-opts-fixed').classList.remove('hidden');
+                    $('mesa-tip-opts-percent').classList.add('hidden');
+                } else {
+                    $('mesa-tip-opts-fixed').classList.add('hidden');
+                    $('mesa-tip-opts-percent').classList.remove('hidden');
+                }
+                mesaPayTip = 0;
+                $('mesa-tip-custom').classList.add('hidden');
+                document.querySelectorAll('.mesa-tip-btn').forEach(b => b.classList.remove('active'));
+                const zeroBtn = document.querySelector('.mesa-tip-btn[data-tip="0"]');
+                if (zeroBtn) zeroBtn.classList.add('active');
+                document.querySelectorAll('.mesa-tip-pct-btn').forEach(b => b.classList.remove('active'));
                 updateMesaPayTotal();
             });
         });
 
+        // Tip buttons (fixed amounts)
+        document.querySelectorAll('.mesa-tip-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mesa-tip-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const tipVal = btn.dataset.tip;
+                if (tipVal === 'custom') {
+                    $('mesa-tip-custom').classList.remove('hidden');
+                    mesaPayTip = parseFloat(($('mesa-tip-amount') || {}).value) || 0;
+                } else {
+                    $('mesa-tip-custom').classList.add('hidden');
+                    mesaPayTip = parseFloat(tipVal) || 0;
+                }
+                updateMesaPayTotal();
+            });
+        });
+
+        // Tip percentage buttons
+        document.querySelectorAll('.mesa-tip-pct-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mesa-tip-pct-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                $('mesa-tip-custom').classList.add('hidden');
+                const pct = parseFloat(btn.dataset.pct) || 0;
+                const payingItems = getMesaPayingItems();
+                const subtotal = payingItems.reduce((s, it) => s + it.price * it.qty, 0);
+                const discountAmt = subtotal * (mesaPayDiscount / 100);
+                const afterDiscount = subtotal - discountAmt;
+                mesaPayTip = Math.round(afterDiscount * pct / 100 * 100) / 100;
+                updateMesaPayTotal();
+            });
+        });
+
+        // Tip custom input
+        const mesaTipInput = $('mesa-tip-amount');
+        if (mesaTipInput) {
+            mesaTipInput.addEventListener('input', () => {
+                mesaPayTip = parseFloat(mesaTipInput.value) || 0;
+                updateMesaPayTotal();
+            });
+        }
+
+        // Cash received input
+        const mesaCashInput = $('mesa-cash-received');
+        if (mesaCashInput) {
+            mesaCashInput.addEventListener('input', () => {
+                updateMesaPayTotal();
+            });
+        }
+
         const confirmPayBtn = $('mesa-confirm-pay');
         if (confirmPayBtn) confirmPayBtn.addEventListener('click', processMesaPayment);
     }
+
+    // ========================================
+    // MENU ADMIN — CRUD de Productos
+    // ========================================
+
+    function getMenuItems() {
+        // Returns Firestore items if loaded, otherwise fallback to data.js
+        if (menuItemsLoaded && menuFirestoreItems.length > 0) return menuFirestoreItems;
+        return MENU_ITEMS;
+    }
+
+    function initMenuAdmin() {
+        if (menuUnsubscribe) {
+            renderMenuAdmin();
+            return;
+        }
+        startMenuListener();
+    }
+
+    function startMenuListener() {
+        menuUnsubscribe = db.collection('menu_items').orderBy('id', 'asc').onSnapshot(snapshot => {
+            if (snapshot.empty && !menuItemsLoaded) {
+                // First time: migrate from data.js
+                migrateMenuToFirestore();
+                return;
+            }
+            menuFirestoreItems = [];
+            snapshot.forEach(doc => {
+                menuFirestoreItems.push({ _docId: doc.id, ...doc.data() });
+            });
+            menuItemsLoaded = true;
+            renderMenuAdmin();
+        }, (err) => {
+            console.error('Menu listener error:', err);
+            menuItemsLoaded = true;
+            menuFirestoreItems = [];
+            renderMenuAdmin();
+        });
+    }
+
+    function migrateMenuToFirestore() {
+        const batch = db.batch();
+        MENU_ITEMS.forEach(item => {
+            const docRef = db.collection('menu_items').doc();
+            batch.set(docRef, {
+                id: item.id,
+                name: item.name,
+                category: item.category,
+                tagline: item.tagline || '',
+                description: item.description || '',
+                ingredients: item.ingredients || [],
+                toppings: item.toppings || [],
+                price: item.price,
+                priceGrande: item.priceGrande,
+                image: item.image || '',
+                emoji: item.emoji || '',
+                badge: item.badge || '',
+                onlyGrande: item.onlyGrande || false,
+                active: true,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        batch.commit().then(() => {
+            showToast('Menú migrado a la base de datos', 'success');
+        }).catch(err => {
+            console.error('Migration error:', err);
+            showToast('Error migrando menú', 'warning');
+        });
+    }
+
+    function initMenuFilterArrows(filtersContainer) {
+        const leftArrow = $('menu-filters-left');
+        const rightArrow = $('menu-filters-right');
+        if (!leftArrow || !rightArrow || !filtersContainer) return;
+
+        function updateArrows() {
+            const sl = filtersContainer.scrollLeft;
+            const maxScroll = filtersContainer.scrollWidth - filtersContainer.clientWidth;
+            if (maxScroll <= 2) {
+                // Everything fits, hide both arrows
+                leftArrow.classList.add('hidden-arrow');
+                rightArrow.classList.add('hidden-arrow');
+            } else {
+                leftArrow.classList.toggle('hidden-arrow', sl <= 2);
+                rightArrow.classList.toggle('hidden-arrow', sl >= maxScroll - 2);
+            }
+        }
+
+        leftArrow.onclick = () => {
+            filtersContainer.scrollBy({ left: -120, behavior: 'smooth' });
+        };
+        rightArrow.onclick = () => {
+            filtersContainer.scrollBy({ left: 120, behavior: 'smooth' });
+        };
+
+        filtersContainer.addEventListener('scroll', updateArrows, { passive: true });
+        // Run on next frame to get accurate measurements after render
+        requestAnimationFrame(() => {
+            updateArrows();
+        });
+    }
+
+    function renderMenuAdmin(catFilter) {
+        catFilter = catFilter || 'all';
+        const filtersContainer = $('menu-admin-filters');
+        const grid = $('menu-admin-grid');
+        if (!filtersContainer || !grid) return;
+
+        const items = getMenuItems();
+        const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
+
+        // Render filter buttons
+        filtersContainer.innerHTML = `<button class="menu-filter-btn ${catFilter === 'all' ? 'active' : ''}" data-menu-cat="all">Todos</button>` +
+            cats.map(k => `<button class="menu-filter-btn ${catFilter === k ? 'active' : ''}" data-menu-cat="${k}"><i class="fas ${CATEGORIES[k].icon}"></i> ${CATEGORIES[k].name}</button>`).join('');
+
+        filtersContainer.querySelectorAll('.menu-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => renderMenuAdmin(btn.dataset.menuCat));
+        });
+
+        // Arrow scroll for filters
+        initMenuFilterArrows(filtersContainer);
+
+        const filtered = catFilter === 'all' ? items : items.filter(i => i.category === catFilter);
+
+        if (!filtered.length) {
+            grid.innerHTML = '<p class="no-orders">No hay productos en esta categoría</p>';
+            return;
+        }
+
+        grid.innerHTML = filtered.map(item => `
+            <div class="menu-admin-card" data-menu-doc-id="${item._docId || ''}">
+                <div class="menu-admin-card-img">
+                    ${item.image ? `<img src="${item.image}" alt="${item.name}">` : `<span class="menu-admin-card-emoji">${item.emoji || '🍽️'}</span>`}
+                </div>
+                <div class="menu-admin-card-body">
+                    <div class="menu-admin-card-title">${item.emoji || ''} ${item.name}</div>
+                    <div class="menu-admin-card-cat">${(CATEGORIES[item.category] || {}).name || item.category}</div>
+                    <div class="menu-admin-card-price">
+                        ${item.onlyGrande || item.priceGrande == null ? '$' + (item.price || 0).toFixed(2) : 'M $' + (item.price || 0).toFixed(2) + ' / G $' + (item.priceGrande || 0).toFixed(2)}
+                    </div>
+                </div>
+                <button class="menu-admin-edit-btn" data-edit-doc="${item._docId || ''}"><i class="fas fa-pen"></i></button>
+            </div>
+        `).join('');
+
+        grid.querySelectorAll('.menu-admin-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => openMenuItemForm(btn.dataset.editDoc));
+        });
+    }
+
+    function openMenuItemForm(docId) {
+        editingMenuItemId = docId || null;
+        menuImageBase64 = '';
+        menuFormIngredients = [];
+        menuFormToppings = [];
+
+        const title = $('menu-form-title');
+        const deleteBtn = $('menu-form-delete');
+
+        if (editingMenuItemId) {
+            // Editing existing item
+            const item = menuFirestoreItems.find(i => i._docId === editingMenuItemId);
+            if (!item) { showToast('Producto no encontrado', 'warning'); return; }
+
+            title.innerHTML = '<i class="fas fa-pen"></i> Editar Producto';
+            deleteBtn.classList.remove('hidden');
+
+            $('menu-item-name').value = item.name || '';
+            $('menu-item-category').value = item.category || 'bowls';
+            $('menu-item-tagline').value = item.tagline || '';
+            $('menu-item-description').value = item.description || '';
+            $('menu-item-emoji').value = item.emoji || '';
+            $('menu-item-badge').value = item.badge || '';
+            $('menu-item-price').value = item.price || '';
+            $('menu-item-price-grande').value = item.priceGrande != null ? item.priceGrande : '';
+            $('menu-item-only-grande').checked = item.onlyGrande !== false;
+            menuFormIngredients = [...(item.ingredients || [])];
+            menuFormToppings = [...(item.toppings || [])];
+
+            // Show image preview if exists
+            const preview = $('menu-img-preview');
+            const placeholder = $('menu-img-placeholder');
+            if (item.image) {
+                preview.src = item.image;
+                preview.style.display = 'block';
+                placeholder.style.display = 'none';
+                menuImageBase64 = item.image;
+            } else {
+                preview.style.display = 'none';
+                placeholder.style.display = 'flex';
+            }
+        } else {
+            // New item
+            title.innerHTML = '<i class="fas fa-plus-circle"></i> Nuevo Producto';
+            deleteBtn.classList.add('hidden');
+
+            $('menu-item-name').value = '';
+            $('menu-item-category').value = 'bowls';
+            $('menu-item-tagline').value = '';
+            $('menu-item-description').value = '';
+            $('menu-item-emoji').value = '';
+            $('menu-item-badge').value = '';
+            $('menu-item-price').value = '';
+            $('menu-item-price-grande').value = '';
+            $('menu-item-only-grande').checked = true;
+            const preview = $('menu-img-preview');
+            const placeholder = $('menu-img-placeholder');
+            preview.style.display = 'none';
+            placeholder.style.display = 'flex';
+        }
+
+        renderMenuTags();
+        $('menu-form-overlay').classList.remove('hidden');
+    }
+
+    function renderMenuTags() {
+        const ingContainer = $('menu-ingredients-tags');
+        const topContainer = $('menu-toppings-tags');
+        if (ingContainer) {
+            ingContainer.innerHTML = menuFormIngredients.map((ing, i) =>
+                `<span class="menu-tag">${ing}<button class="menu-tag-remove" data-type="ingredient" data-idx="${i}"><i class="fas fa-times"></i></button></span>`
+            ).join('');
+            ingContainer.querySelectorAll('.menu-tag-remove').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    menuFormIngredients.splice(parseInt(btn.dataset.idx), 1);
+                    renderMenuTags();
+                });
+            });
+        }
+        if (topContainer) {
+            topContainer.innerHTML = menuFormToppings.map((top, i) =>
+                `<span class="menu-tag">${top}<button class="menu-tag-remove" data-type="topping" data-idx="${i}"><i class="fas fa-times"></i></button></span>`
+            ).join('');
+            topContainer.querySelectorAll('.menu-tag-remove').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    menuFormToppings.splice(parseInt(btn.dataset.idx), 1);
+                    renderMenuTags();
+                });
+            });
+        }
+    }
+
+    function saveMenuItem() {
+        const name = ($('menu-item-name') || {}).value.trim();
+        const category = ($('menu-item-category') || {}).value;
+        const price = parseFloat(($('menu-item-price') || {}).value);
+
+        if (!name) { showToast('El nombre es obligatorio', 'warning'); return; }
+        if (!price || price <= 0) { showToast('El precio es obligatorio', 'warning'); return; }
+
+        const onlyGrande = ($('menu-item-only-grande') || {}).checked;
+        const priceGrandeVal = parseFloat(($('menu-item-price-grande') || {}).value);
+        const priceGrande = (!onlyGrande && priceGrandeVal > 0) ? priceGrandeVal : null;
+
+        const data = {
+            name,
+            category,
+            tagline: ($('menu-item-tagline') || {}).value.trim(),
+            description: ($('menu-item-description') || {}).value.trim(),
+            emoji: ($('menu-item-emoji') || {}).value.trim(),
+            badge: ($('menu-item-badge') || {}).value.trim(),
+            price,
+            priceGrande,
+            onlyGrande,
+            ingredients: menuFormIngredients,
+            toppings: menuFormToppings,
+            image: menuImageBase64 || '',
+            active: true,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        if (editingMenuItemId) {
+            // Update existing
+            db.collection('menu_items').doc(editingMenuItemId).update(data).then(() => {
+                showToast('Producto actualizado', 'success');
+                $('menu-form-overlay').classList.add('hidden');
+            }).catch(() => showToast('Error actualizando', 'warning'));
+        } else {
+            // Create new - generate next ID
+            const maxId = menuFirestoreItems.reduce((max, i) => Math.max(max, i.id || 0), 0);
+            data.id = maxId + 1;
+            data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+            db.collection('menu_items').add(data).then(() => {
+                showToast('Producto creado', 'success');
+                $('menu-form-overlay').classList.add('hidden');
+            }).catch(() => showToast('Error creando producto', 'warning'));
+        }
+    }
+
+    function deleteMenuItem() {
+        if (!editingMenuItemId) return;
+        if (!confirm('¿Eliminar este producto del menú?')) return;
+        db.collection('menu_items').doc(editingMenuItemId).delete().then(() => {
+            showToast('Producto eliminado', 'success');
+            $('menu-form-overlay').classList.add('hidden');
+        }).catch(() => showToast('Error eliminando', 'warning'));
+    }
+
+    // Menu admin event listeners
+    (function bindMenuAdminEvents() {
+        const addBtn = $('menu-add-btn');
+        if (addBtn) addBtn.addEventListener('click', () => openMenuItemForm(null));
+
+        const saveBtn = $('menu-form-save');
+        if (saveBtn) saveBtn.addEventListener('click', saveMenuItem);
+
+        const delBtn = $('menu-form-delete');
+        if (delBtn) delBtn.addEventListener('click', deleteMenuItem);
+
+        const closeBtn = $('menu-form-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => $('menu-form-overlay').classList.add('hidden'));
+
+        const cancelBtn = $('menu-form-cancel');
+        if (cancelBtn) cancelBtn.addEventListener('click', () => $('menu-form-overlay').classList.add('hidden'));
+
+        const overlay = $('menu-form-overlay');
+        if (overlay) overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.add('hidden'); });
+
+        // Image upload
+        const imgUpload = $('menu-img-upload');
+        const imgInput = $('menu-img-input');
+        if (imgUpload && imgInput) {
+            imgUpload.addEventListener('click', () => imgInput.click());
+            imgInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (file.size > 1048576) { showToast('Imagen muy grande (máx 1MB)', 'warning'); return; }
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    menuImageBase64 = ev.target.result;
+                    const preview = $('menu-img-preview');
+                    const placeholder = $('menu-img-placeholder');
+                    if (preview) { preview.src = menuImageBase64; preview.style.display = 'block'; }
+                    if (placeholder) placeholder.style.display = 'none';
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Ingredient add
+        const ingAddBtn = $('menu-ingredient-add');
+        const ingInput = $('menu-ingredient-input');
+        if (ingAddBtn && ingInput) {
+            const addIng = () => {
+                const val = ingInput.value.trim();
+                if (val) { menuFormIngredients.push(val); ingInput.value = ''; renderMenuTags(); }
+            };
+            ingAddBtn.addEventListener('click', addIng);
+            ingInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addIng(); } });
+        }
+
+        // Topping add
+        const topAddBtn = $('menu-topping-add');
+        const topInput = $('menu-topping-input');
+        if (topAddBtn && topInput) {
+            const addTop = () => {
+                const val = topInput.value.trim();
+                if (val) { menuFormToppings.push(val); topInput.value = ''; renderMenuTags(); }
+            };
+            topAddBtn.addEventListener('click', addTop);
+            topInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTop(); } });
+        }
+    })();
 
     // ========================================
     // TOAST
