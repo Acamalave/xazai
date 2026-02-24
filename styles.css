@@ -1763,9 +1763,12 @@ body {
 .admin-main {
     flex: 1;
     min-width: 0;
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
     overflow-y: auto;
     padding: 28px;
+    box-sizing: border-box;
 }
 
 .admin-section {
@@ -1992,6 +1995,8 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .pos-categories {
@@ -2023,6 +2028,8 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 12px;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .pos-product-card {
@@ -2037,6 +2044,8 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 8px;
+    overflow: hidden;
+    min-width: 0;
 }
 
 .pos-product-card:hover {
@@ -2066,12 +2075,20 @@ body {
     font-weight: 600;
     color: var(--text);
     line-height: 1.3;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .pos-product-price {
     font-size: 14px;
     font-weight: 700;
     color: var(--accent);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* POS Invoice */
@@ -3528,25 +3545,28 @@ body {
     }
 }
 
-/* POS Responsive — Phones (single column POS layout) */
+/* POS Responsive — Phones */
 @media (max-width: 600px) {
+    .admin-main {
+        padding: 12px;
+    }
     .pos-products-grid {
         grid-template-columns: repeat(2, 1fr);
         gap: 8px;
     }
     .pos-product-card {
-        padding: 10px 8px;
+        padding: 10px 6px;
         gap: 6px;
     }
     .pos-product-img {
-        width: 72px;
-        height: 72px;
+        width: 64px;
+        height: 64px;
     }
     .pos-product-name {
         font-size: 11px;
     }
     .pos-product-price {
-        font-size: 12px;
+        font-size: 11px;
     }
 }
 
