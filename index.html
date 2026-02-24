@@ -11,7 +11,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
     <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
     <meta name="theme-color" content="#1a0a3e">
-    <link rel="stylesheet" href="styles.css?v=20260214k">
+    <link rel="stylesheet" href="styles.css?v=20260223c">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
@@ -243,6 +243,10 @@
                     <i class="fas fa-boxes-stacked"></i>
                     <span>Inventario</span>
                 </button>
+                <button class="admin-nav-btn" data-section="menu">
+                    <i class="fas fa-utensils"></i>
+                    <span>Menú</span>
+                </button>
                 <button class="admin-nav-btn" data-section="expenses">
                     <i class="fas fa-file-invoice-dollar"></i>
                     <span>Gastos</span>
@@ -270,6 +274,10 @@
                 <button class="admin-nav-btn" data-section="rrhh">
                     <i class="fas fa-id-badge"></i>
                     <span>RRHH</span>
+                </button>
+                <button class="admin-nav-btn" data-section="usuarios">
+                    <i class="fas fa-users"></i>
+                    <span>Usuarios</span>
                 </button>
             </nav>
             <button class="admin-logout-btn" id="admin-logout">
@@ -373,6 +381,20 @@
                                     <div class="pos-cash-input-wrap"><span>$</span><input type="number" id="pos-tip-amount" placeholder="0.00" min="0" step="0.01"></div>
                                 </div>
                             </div>
+                            <div class="pos-delivery-section">
+                                <span class="pos-delivery-label"><i class="fas fa-motorcycle"></i> Delivery</span>
+                                <div class="pos-delivery-toggle">
+                                    <label class="toggle-switch"><input type="checkbox" id="pos-delivery-toggle"><span class="toggle-slider"></span></label>
+                                </div>
+                            </div>
+                            <div class="pos-delivery-fields hidden" id="pos-delivery-fields">
+                                <div class="pos-cash-input-wrap"><span>$</span><input type="number" id="pos-delivery-amount" placeholder="0.00" min="0" step="0.50"></div>
+                                <input type="text" id="pos-delivery-note" placeholder="Dirección o referencia..." class="pos-ref-input" maxlength="120">
+                            </div>
+                            <div class="pos-total-line pos-delivery-line hidden" id="pos-delivery-display">
+                                <span><i class="fas fa-motorcycle"></i> Delivery</span>
+                                <span id="pos-delivery-value">$0.00</span>
+                            </div>
                             <div class="pos-total-line pos-total-main"><span>Total</span><span id="pos-total">$0.00</span></div>
                         </div>
                         <div class="pos-payment-method">
@@ -471,6 +493,114 @@
                 </div>
                 <div id="inv-tab-ingredientes" class="inv-tab-content hidden">
                     <div class="inventory-list" id="ingredients-list"></div>
+                </div>
+            </section>
+
+            <!-- MENU ADMIN Section -->
+            <section id="admin-sec-menu" class="admin-section hidden">
+                <div class="admin-section-header">
+                    <h2><i class="fas fa-utensils"></i> Gestión de Menú</h2>
+                    <p class="admin-section-subtitle">Crea, edita y administra todos los productos del menú</p>
+                </div>
+                <div class="menu-admin-toolbar">
+                    <div class="menu-filters-wrapper">
+                        <button class="menu-filters-arrow menu-filters-arrow-left" id="menu-filters-left" aria-label="Anterior"><i class="fas fa-chevron-left"></i></button>
+                        <div class="menu-admin-filters" id="menu-admin-filters">
+                            <button class="menu-filter-btn active" data-menu-cat="all">Todos</button>
+                        </div>
+                        <button class="menu-filters-arrow menu-filters-arrow-right" id="menu-filters-right" aria-label="Siguiente"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <button class="menu-add-btn" id="menu-add-btn"><i class="fas fa-plus"></i> Nuevo Producto</button>
+                </div>
+                <div class="menu-admin-grid" id="menu-admin-grid">
+                    <p class="no-orders">Cargando productos...</p>
+                </div>
+
+                <!-- Menu Item Form Modal -->
+                <div class="menu-form-overlay hidden" id="menu-form-overlay">
+                    <div class="menu-form-content">
+                        <button class="modal-close" id="menu-form-close"><i class="fas fa-times"></i></button>
+                        <h3 id="menu-form-title"><i class="fas fa-plus-circle"></i> Nuevo Producto</h3>
+                        <div class="menu-form-body">
+                            <div class="menu-form-grid">
+                                <div class="menu-form-field menu-form-img-field">
+                                    <label>Imagen del Producto</label>
+                                    <div class="menu-img-upload" id="menu-img-upload">
+                                        <input type="file" id="menu-img-input" accept="image/*" style="display:none">
+                                        <div class="menu-img-placeholder" id="menu-img-placeholder">
+                                            <i class="fas fa-camera"></i>
+                                            <span>Subir imagen</span>
+                                        </div>
+                                        <img id="menu-img-preview" class="menu-img-preview" style="display:none" alt="Preview">
+                                    </div>
+                                </div>
+                                <div class="menu-form-field">
+                                    <label>Nombre <span class="req">*</span></label>
+                                    <input type="text" id="menu-item-name" placeholder="Ej: Açaí Power Bowl">
+                                </div>
+                                <div class="menu-form-field">
+                                    <label>Categoría <span class="req">*</span></label>
+                                    <select id="menu-item-category">
+                                        <option value="bowls">Bowls</option>
+                                        <option value="smoothies">Smoothies</option>
+                                        <option value="jugos">Jugos</option>
+                                        <option value="shots">Shots</option>
+                                        <option value="cafe">Café</option>
+                                        <option value="bebidas">Bebidas</option>
+                                    </select>
+                                </div>
+                                <div class="menu-form-field">
+                                    <label>Tagline</label>
+                                    <input type="text" id="menu-item-tagline" placeholder="Ej: El favorito de la casa">
+                                </div>
+                                <div class="menu-form-field menu-form-full">
+                                    <label>Descripción</label>
+                                    <textarea id="menu-item-description" rows="3" placeholder="Descripción del producto..."></textarea>
+                                </div>
+                                <div class="menu-form-field">
+                                    <label>Emoji</label>
+                                    <input type="text" id="menu-item-emoji" placeholder="💜" maxlength="4">
+                                </div>
+                                <div class="menu-form-field">
+                                    <label>Badge</label>
+                                    <input type="text" id="menu-item-badge" placeholder="Ej: Clásico, Favorito">
+                                </div>
+                                <div class="menu-form-field">
+                                    <label>Precio ($) <span class="req">*</span></label>
+                                    <input type="number" id="menu-item-price" placeholder="0.00" min="0" step="0.01">
+                                </div>
+                                <div class="menu-form-field">
+                                    <label>Precio Grande ($)</label>
+                                    <input type="number" id="menu-item-price-grande" placeholder="Dejar vacío si solo un tamaño" min="0" step="0.01">
+                                </div>
+                                <div class="menu-form-field menu-form-toggle-field">
+                                    <label>Solo un tamaño (Grande)</label>
+                                    <label class="toggle-switch"><input type="checkbox" id="menu-item-only-grande" checked><span class="toggle-slider"></span></label>
+                                </div>
+                                <div class="menu-form-field menu-form-full">
+                                    <label>Ingredientes</label>
+                                    <div class="menu-tags-container" id="menu-ingredients-tags"></div>
+                                    <div class="menu-tag-input-row">
+                                        <input type="text" id="menu-ingredient-input" placeholder="Agregar ingrediente...">
+                                        <button class="menu-tag-add-btn" id="menu-ingredient-add"><i class="fas fa-plus"></i></button>
+                                    </div>
+                                </div>
+                                <div class="menu-form-field menu-form-full">
+                                    <label>Toppings</label>
+                                    <div class="menu-tags-container" id="menu-toppings-tags"></div>
+                                    <div class="menu-tag-input-row">
+                                        <input type="text" id="menu-topping-input" placeholder="Agregar topping...">
+                                        <button class="menu-tag-add-btn" id="menu-topping-add"><i class="fas fa-plus"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="menu-form-actions">
+                                <button class="menu-form-cancel" id="menu-form-cancel">Cancelar</button>
+                                <button class="menu-form-save" id="menu-form-save"><i class="fas fa-save"></i> Guardar Producto</button>
+                                <button class="menu-form-delete hidden" id="menu-form-delete"><i class="fas fa-trash"></i> Eliminar</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -755,6 +885,27 @@
                     <div class="fact-modal-body" id="fact-modal-body"></div>
                     <div class="fact-modal-actions">
                         <button class="fact-print-btn" id="fact-print-btn"><i class="fas fa-print"></i> Imprimir</button>
+                        <button class="fact-void-btn" id="fact-void-btn"><i class="fas fa-ban"></i> Anular Factura</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Void Invoice Modal -->
+            <div class="fact-modal hidden" id="fact-void-modal">
+                <div class="fact-modal-content" style="max-width:420px">
+                    <div class="fact-modal-header">
+                        <h3><i class="fas fa-ban"></i> Anular Factura</h3>
+                        <button class="fact-modal-close" id="fact-void-modal-close"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div class="fact-modal-body" style="padding:16px">
+                        <p style="margin-bottom:12px;color:var(--text-light);font-size:13px">Esta factura quedará marcada como <strong>ANULADA</strong>. El registro no se eliminará.</p>
+                        <label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Razón de anulación <span style="color:#e74c3c">*</span></label>
+                        <textarea id="fact-void-reason" rows="3" placeholder="Escribe la razón de la anulación..." style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;font-family:inherit"></textarea>
+                        <p id="fact-void-error" style="color:#e74c3c;font-size:11px;margin-top:4px;display:none">Debes escribir una razón para anular.</p>
+                    </div>
+                    <div class="fact-modal-actions">
+                        <button class="fact-print-btn" id="fact-void-cancel-btn" style="background:var(--bg-card);color:var(--text)">Cancelar</button>
+                        <button class="fact-void-btn" id="fact-void-confirm-btn"><i class="fas fa-ban"></i> Confirmar Anulación</button>
                     </div>
                 </div>
             </div>
@@ -856,6 +1007,72 @@
                         <button class="mesa-action-btn mesa-btn-open hidden" id="mesa-open-btn"><i class="fas fa-door-open"></i> Abrir Mesa</button>
                         <button class="mesa-action-btn mesa-btn-bill hidden" id="mesa-request-bill-btn"><i class="fas fa-file-invoice"></i> Pedir Cuenta</button>
                         <button class="mesa-action-btn mesa-btn-close hidden" id="mesa-close-btn"><i class="fas fa-check-circle"></i> Cerrar Mesa</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- USUARIOS Section -->
+            <section id="admin-sec-usuarios" class="admin-section hidden">
+                <!-- Vista Lista -->
+                <div id="usr-list-view">
+                    <div class="admin-section-header">
+                        <h2><i class="fas fa-users"></i> Usuarios</h2>
+                        <p class="admin-section-subtitle">Clientes que han realizado transacciones</p>
+                    </div>
+
+                    <div class="usr-search-wrap">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="usr-search" placeholder="Buscar por nombre o teléfono..." maxlength="60">
+                    </div>
+
+                    <div class="usr-stats-row" id="usr-stats-row">
+                        <div class="usr-stat-card">
+                            <span class="usr-stat-value" id="usr-stat-total">0</span>
+                            <span class="usr-stat-label">Total Clientes</span>
+                        </div>
+                        <div class="usr-stat-card">
+                            <span class="usr-stat-value" id="usr-stat-active">0</span>
+                            <span class="usr-stat-label">Activos (30d)</span>
+                        </div>
+                        <div class="usr-stat-card">
+                            <span class="usr-stat-value" id="usr-stat-revenue">$0</span>
+                            <span class="usr-stat-label">Ingresos Totales</span>
+                        </div>
+                    </div>
+
+                    <div class="usr-sort-bar">
+                        <button class="usr-sort-btn active" data-sort="recent"><i class="fas fa-clock"></i> Recientes</button>
+                        <button class="usr-sort-btn" data-sort="spent"><i class="fas fa-dollar-sign"></i> Mayor Gasto</button>
+                        <button class="usr-sort-btn" data-sort="orders"><i class="fas fa-shopping-bag"></i> Más Pedidos</button>
+                    </div>
+
+                    <div class="usr-grid" id="usr-list-container">
+                        <div class="usr-empty">
+                            <i class="fas fa-user-friends"></i>
+                            <p>No hay clientes registrados aún</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista Detalle -->
+                <div id="usr-detail-view" class="hidden">
+                    <button class="usr-back-btn" id="usr-back-btn">
+                        <i class="fas fa-arrow-left"></i> Volver
+                    </button>
+
+                    <div class="usr-profile" id="usr-profile">
+                        <!-- Filled by JS -->
+                    </div>
+
+                    <div class="usr-detail-stats" id="usr-detail-stats">
+                        <!-- Filled by JS -->
+                    </div>
+
+                    <div class="usr-history-header">
+                        <h3><i class="fas fa-history"></i> Historial de Transacciones</h3>
+                    </div>
+                    <div class="usr-timeline" id="usr-timeline">
+                        <p class="usr-loading"><i class="fas fa-spinner fa-spin"></i> Cargando historial...</p>
                     </div>
                 </div>
             </section>
@@ -1108,29 +1325,89 @@
             <button class="modal-close" id="mesa-pay-close"><i class="fas fa-times"></i></button>
             <h3><i class="fas fa-cash-register"></i> Cobrar <span id="mesa-pay-title"></span></h3>
             <div class="mesa-pay-summary" id="mesa-pay-summary"></div>
-            <div class="pos-payment-method" style="padding:0;border:none;">
-                <h4 style="margin-bottom:10px;">Método de Pago</h4>
+
+            <!-- Descuento -->
+            <div class="mesa-pay-section">
+                <span class="mesa-pay-section-label">Descuento</span>
+                <div class="mesa-discount-options">
+                    <button class="mesa-discount-btn active" data-discount="0">Sin</button>
+                    <button class="mesa-discount-btn" data-discount="15">15% <small>Jubilado</small></button>
+                    <button class="mesa-discount-btn" data-discount="10">10%</button>
+                    <button class="mesa-discount-btn" data-discount="custom">Otro</button>
+                </div>
+                <div class="mesa-discount-custom hidden" id="mesa-discount-custom">
+                    <div class="mesa-input-wrap"><span>%</span><input type="number" id="mesa-discount-amount" placeholder="0" min="0" max="100" step="1"></div>
+                </div>
+            </div>
+
+            <!-- Propina -->
+            <div class="mesa-pay-section">
+                <span class="mesa-pay-section-label">Propina</span>
+                <div class="mesa-tip-type-row">
+                    <button class="mesa-tip-type-btn active" data-mesa-tip-type="fixed">$ Fijo</button>
+                    <button class="mesa-tip-type-btn" data-mesa-tip-type="percent">% Pct</button>
+                </div>
+                <div class="mesa-tip-options" id="mesa-tip-opts-fixed">
+                    <button class="mesa-tip-btn active" data-tip="0">Sin</button>
+                    <button class="mesa-tip-btn" data-tip="1">$1</button>
+                    <button class="mesa-tip-btn" data-tip="2">$2</button>
+                    <button class="mesa-tip-btn" data-tip="5">$5</button>
+                    <button class="mesa-tip-btn" data-tip="custom">Otro</button>
+                </div>
+                <div class="mesa-tip-options hidden" id="mesa-tip-opts-percent">
+                    <button class="mesa-tip-pct-btn" data-pct="10">10%</button>
+                    <button class="mesa-tip-pct-btn" data-pct="15">15%</button>
+                    <button class="mesa-tip-pct-btn" data-pct="18">18%</button>
+                    <button class="mesa-tip-pct-btn" data-pct="20">20%</button>
+                </div>
+                <div class="mesa-tip-custom hidden" id="mesa-tip-custom">
+                    <div class="mesa-input-wrap"><span>$</span><input type="number" id="mesa-tip-amount" placeholder="0.00" min="0" step="0.01"></div>
+                </div>
+            </div>
+
+            <!-- Totales desglosados -->
+            <div class="mesa-pay-totals">
+                <div class="mesa-pay-line"><span>Subtotal</span><span id="mesa-pay-subtotal">$0.00</span></div>
+                <div class="mesa-pay-line mesa-pay-discount-line hidden" id="mesa-pay-discount-line">
+                    <span>Descuento (<span id="mesa-pay-discount-pct">0</span>%)</span>
+                    <span id="mesa-pay-discount-value" class="mesa-discount-savings">-$0.00</span>
+                </div>
+                <div class="mesa-pay-line" id="mesa-pay-tip-line"><span>Propina</span><span id="mesa-pay-tip-display">$0.00</span></div>
+                <div class="mesa-pay-line mesa-pay-line-total"><span>Total</span><strong id="mesa-pay-total">$0.00</strong></div>
+            </div>
+
+            <!-- Metodo de Pago -->
+            <div class="mesa-pay-section">
+                <h4 class="mesa-pay-section-title">Método de Pago</h4>
                 <div class="pos-methods">
                     <button class="mesa-method-btn active" data-method="efectivo"><i class="fas fa-money-bill-wave"></i> Efectivo</button>
                     <button class="mesa-method-btn" data-method="yappy"><i class="fas fa-mobile-alt"></i> Yappy</button>
                     <button class="mesa-method-btn" data-method="tarjeta"><i class="fas fa-credit-card"></i> Tarjeta</button>
                     <button class="mesa-method-btn" data-method="ach"><i class="fas fa-university"></i> ACH</button>
                 </div>
-            </div>
-            <div class="mesa-pay-tip-row">
-                <span>Propina:</span>
-                <div class="pos-tip-options" style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button class="mesa-tip-btn active" data-tip="0">Sin propina</button>
-                    <button class="mesa-tip-btn" data-tip="1">$1</button>
-                    <button class="mesa-tip-btn" data-tip="2">$2</button>
-                    <button class="mesa-tip-btn" data-tip="5">$5</button>
-                    <button class="mesa-tip-btn" data-tip="10">$10</button>
+                <!-- Efectivo: recibido y cambio -->
+                <div class="mesa-cash-change" id="mesa-cash-change">
+                    <div class="mesa-cash-row">
+                        <label>Recibido:</label>
+                        <div class="mesa-input-wrap"><span>$</span><input type="number" id="mesa-cash-received" placeholder="0.00" min="0" step="0.01"></div>
+                    </div>
+                    <div class="mesa-cash-row mesa-change-row">
+                        <label>Cambio:</label>
+                        <span id="mesa-change-amount" class="mesa-change-value">$0.00</span>
+                    </div>
+                </div>
+                <!-- Refs por metodo -->
+                <div class="mesa-payment-details hidden" id="mesa-payment-details-tarjeta">
+                    <div class="mesa-cash-row"><label><i class="fas fa-credit-card"></i> Últimos 4 / Ref:</label><input type="text" id="mesa-tarjeta-ref" placeholder="1234 o referencia" maxlength="30" class="mesa-ref-input"></div>
+                </div>
+                <div class="mesa-payment-details hidden" id="mesa-payment-details-ach">
+                    <div class="mesa-cash-row"><label><i class="fas fa-university"></i> Ref ACH:</label><input type="text" id="mesa-ach-ref" placeholder="Referencia de transferencia" maxlength="40" class="mesa-ref-input"></div>
+                </div>
+                <div class="mesa-payment-details hidden" id="mesa-payment-details-yappy">
+                    <div class="mesa-cash-row"><label><i class="fas fa-mobile-alt"></i> Ref Yappy:</label><input type="text" id="mesa-yappy-ref" placeholder="Ref. de transacción Yappy" maxlength="40" class="mesa-ref-input"></div>
                 </div>
             </div>
-            <div class="mesa-pay-total-row">
-                <span>Total a cobrar:</span>
-                <strong id="mesa-pay-total">$0.00</strong>
-            </div>
+
             <button class="pos-charge-btn" id="mesa-confirm-pay" style="margin:0;width:100%;"><i class="fas fa-check-circle"></i> Confirmar Pago</button>
         </div>
     </div>
@@ -1146,8 +1423,8 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
     </script>
-    <script src="data.js?v=20260214k"></script>
+    <script src="data.js?v=20260222e"></script>
     <script type="module" src="https://bt-cdn.yappy.cloud/v1/cdn/web-component-btn-yappy.js"></script>
-    <script src="app.js?v=20260214k"></script>
+    <script src="app.js?v=20260222e"></script>
 </body>
 </html>
