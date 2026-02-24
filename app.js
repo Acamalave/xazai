@@ -437,7 +437,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function isProductAvailable(productId) {
         const inv = inventoryCache[String(productId)];
-        return inv ? inv.active !== false : true;
+        if (!inv) return true;
+        if (inv.active === false) return false;
+        // If both sizes are explicitly disabled, product is unavailable
+        if (inv.activeM === false && inv.activeG === false) return false;
+        return true;
     }
 
     // ========================================
@@ -1502,7 +1506,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     showToast('Máximo 4 toppings', 'warning');
                 }
             } else {
-                container.querySelectorAll('.build-option').forEach(b => b.classList.remove('selected'));
+                newContainer.querySelectorAll('.build-option').forEach(b => b.classList.remove('selected'));
                 btn.classList.add('selected');
                 buildBowl[type] = { id, name, price: parseFloat(price) };
             }
@@ -1730,11 +1734,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!item) return;
                 if (btn.dataset.action === 'plus' && item.quantity < 20) {
                     item.quantity++;
-                    item.total = (item.basePrice + item.toppingsPrice) * item.quantity;
+                    item.total = (item.basePrice * (item.sizeMultiplier || 1) + item.toppingsPrice) * item.quantity;
                 } else if (btn.dataset.action === 'minus') {
                     if (item.quantity > 1) {
                         item.quantity--;
-                        item.total = (item.basePrice + item.toppingsPrice) * item.quantity;
+                        item.total = (item.basePrice * (item.sizeMultiplier || 1) + item.toppingsPrice) * item.quantity;
                     } else {
                         cart = cart.filter(i => i.id !== item.id);
                     }
@@ -2364,7 +2368,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                     // Save order to Firestore as waiting for payment (non-blocking)
                     try {
-                        saveOrderToFirestore(orderId, deliveryAddress, 'esperando_pago', total, subtotal);
+                        saveOrderToFirestore(orderId, deliveryAddress, 'esperando_pago', total, subtotal, currentTip, deliveryFee);
                     } catch (fsErr) {
                         console.error('Firestore save error (non-blocking):', fsErr);
                     }
@@ -2406,7 +2410,10 @@ document.addEventListener('DOMContentLoaded', function() {
             currentTip = 0;
             currentDeliveryFee = 0;
             deliveryDistanceKm = 0;
+            if (mapMarker && typeof deliveryMap !== 'undefined' && deliveryMap) { try { deliveryMap.removeLayer(mapMarker); } catch(e){} }
             mapMarker = null;
+            const addrInput = $('delivery-address');
+            if (addrInput) addrInput.value = '';
             updateCartUI();
             localStorage.removeItem('xazai_pending_order');
 
@@ -2419,6 +2426,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Update Firestore: mark as paid + decrement inventory NOW that payment is confirmed
             updateOrderPaymentStatusAndDecrement(orderId);
+            yappyCurrentOrderId = null;
             btnYappy.isButtonLoading = false;
         });
 
@@ -2426,12 +2434,14 @@ document.addEventListener('DOMContentLoaded', function() {
         btnYappy.addEventListener("eventError", (event) => {
             console.log("Yappy pago fallido:", event.detail);
             $('payment-modal').classList.remove('yappy-active');
+            $('yappy-loading').classList.add('hidden');
             $('yappy-error').classList.remove('hidden');
             $('yappy-error-msg').textContent = 'El pago no se completó. Intenta de nuevo.';
             showToast('El pago no se completó. Intenta de nuevo.', 'warning');
             btnYappy.isButtonLoading = false;
             // Cancel the orphaned order to prevent ghost orders
             cancelOrphanedYappyOrder(yappyCurrentOrderId);
+            yappyCurrentOrderId = null;
         });
 
         console.log('Yappy V2 web component initialized');
@@ -2455,9 +2465,9 @@ document.addEventListener('DOMContentLoaded', function() {
         container.appendChild(errorDiv);
     }
 
-    function saveOrderToFirestore(orderId, address, status, total, subtotal) {
+    function saveOrderToFirestore(orderId, address, status, total, subtotal, tipAmount, deliveryAmount) {
         if (typeof db === 'undefined') return;
-        const deliveryFee = currentDeliveryFee;
+        const deliveryFee = deliveryAmount;
         // Sanitize cart items to remove any undefined values
         const sanitizedItems = cart.map(i => ({
             name: i.name || '',
@@ -2482,8 +2492,8 @@ document.addEventListener('DOMContentLoaded', function() {
             subtotal: subtotal || cart.reduce((s, i) => s + i.total, 0),
             delivery: deliveryFee,
             deliveryDistance: deliveryDistanceKm || 0,
-            tip: currentTip || 0,
-            total: total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + (currentTip || 0)),
+            tip: tipAmount || 0,
+            total: total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + (tipAmount || 0)),
             status: status,
             paymentMethod: 'yappy',
             paymentConfirmed: false,
@@ -2508,17 +2518,21 @@ document.addEventListener('DOMContentLoaded', function() {
         db.collection('orders').where('number', '==', orderId).get().then(snap => {
             snap.forEach(doc => {
                 const order = doc.data();
+                // First update status and payment confirmation (without inventoryDecremented flag yet)
                 doc.ref.update({
                     status: 'pendiente',
                     paymentConfirmed: true,
-                    paymentDate: new Date(),
-                    inventoryDecremented: true
+                    paymentDate: new Date()
                 });
-                // NOW decrement inventory since payment is confirmed
+                // Decrement inventory, then mark flag only on success
                 const items = order.items || [];
                 decrementInventoryOnSale(items.map(i => ({ name: i.name, productId: i.productId, qty: i.quantity || 1 })));
+                // Mark inventoryDecremented after decrement call (best-effort)
+                doc.ref.update({ inventoryDecremented: true });
                 // Track customer AFTER payment confirmed
-                upsertCustomer(order.customerPhone, order.customerName, order.total || 0, 'online', order.address || '');
+                if (order.customerPhone) {
+                    upsertCustomer(order.customerPhone, order.customerName, order.total || 0, 'online', order.address || '');
+                }
             });
         }).catch(err => console.error('Error updating payment status:', err));
     }
@@ -2627,7 +2641,10 @@ document.addEventListener('DOMContentLoaded', function() {
         currentTip = 0;
         currentDeliveryFee = 0;
         deliveryDistanceKm = 0;
+        if (mapMarker && typeof deliveryMap !== 'undefined' && deliveryMap) { try { deliveryMap.removeLayer(mapMarker); } catch(e){} }
         mapMarker = null;
+        const addrInput = $('delivery-address');
+        if (addrInput) addrInput.value = '';
         updateCartUI();
         closePaymentModal();
         if (!cartSidebar.classList.contains('hidden')) toggleCart();
@@ -2989,6 +3006,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 productId: i.productId || null,
                 name: i.name || '', emoji: i.emoji || '', qty: i.quantity || i.qty || 1,
                 price: i.price || 0, size: i.size || '',
+                toppings: i.toppings || [],
+                note: i.note || '',
                 total: i.total || (i.price || 0) * (i.quantity || i.qty || 1)
             }));
             const subtotal = order.subtotal || items.reduce((s, i) => s + i.total, 0);
@@ -3004,7 +3023,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 delivery,
                 total,
                 paymentMethod: order.paymentMethod || 'efectivo',
-                paymentDetails: {},
+                paymentDetails: order.paymentDetails || {},
                 source: 'online',
                 orderNumber: order.number || '',
                 customerName: order.customerName || '',
@@ -3037,6 +3056,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const batch = db.batch();
             let hasUpdates = false;
             items.forEach(item => {
+                // Skip toppings — they don't have product-level stock
+                if (typeof item.productId === 'string' && item.productId.startsWith('t')) return;
                 const qty = item.quantity || item.qty || 1;
                 // Match by productId first, then fall back to name
                 let product = null;
@@ -4563,7 +4584,7 @@ document.addEventListener('DOMContentLoaded', function() {
             (sale.items || []).forEach(item => {
                 const key = item.name || 'Desconocido';
                 if (!products[key]) products[key] = { name: key, emoji: item.emoji || '', qty: 0, total: 0 };
-                const itemQty = item.qty || 1;
+                const itemQty = item.qty || item.quantity || 1;
                 products[key].qty += itemQty;
                 products[key].total += item.total || ((item.price || 0) * itemQty);
             });
@@ -5150,7 +5171,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (rrhhReportRange === 'today') {
             return { startDate: fmt(now), endDate: fmt(now) };
         } else if (rrhhReportRange === 'week') {
-            const start = new Date(now); start.setDate(start.getDate() - start.getDay());
+            const dayOfWeek = now.getDay();
+            const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+            const start = new Date(now); start.setDate(start.getDate() - mondayOffset);
             const end = new Date(start); end.setDate(end.getDate() + 6);
             return { startDate: fmt(start), endDate: fmt(end) };
         } else if (rrhhReportRange === 'month') {
@@ -5604,7 +5627,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             ordersSnap.forEach(doc => {
                 const d = doc.data();
-                if (d.status === 'cancelado' && !d.voided) return;
+                if (d.status === 'cancelado') return;
                 // Skip orders already converted to sales to avoid double-counting
                 if (d.convertedToSale) return;
                 factInvoices.push({
@@ -5904,8 +5927,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     total: d.total || 0,
                     paymentMethod: d.paymentMethod || 'efectivo',
                     deviceType: d.deviceType || null,
-                    customerPhone: null,
-                    customerName: null,
+                    customerPhone: d.customerPhone || null,
+                    customerName: d.customerName || null,
                     status: 'completed',
                     type: 'sale'
                 });
@@ -5915,8 +5938,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!d.createdAt) return;
                 // Skip orders already converted to sales to avoid double-counting
                 if (d.convertedToSale) return;
-                // Skip cancelled orders — they don't represent real transactions
+                // Skip cancelled or voided orders — they don't represent real transactions
                 if (d.status === 'cancelado') return;
+                if (d.voided) return;
                 const date = new Date(d.createdAt.seconds * 1000);
                 transactions.push({
                     timestamp: date,
@@ -6712,7 +6736,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const allMenuItems = getMenuItems();
+        const allMenuItems = getMenuItems().filter(i => isProductAvailable(i.id));
         const items = catFilter === 'extras' ? [] : (catFilter === 'all' ? allMenuItems : allMenuItems.filter(i => i.category === catFilter));
         let html = items.map(item => {
             const hasSizes = item.priceGrande != null && !item.onlyGrande;
@@ -7112,6 +7136,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tableNumber: currentMesa.tableNumber,
             tableName: currentMesa.tableName || 'Mesa ' + currentMesa.tableNumber,
             customerName: mesaPayDinerIdx !== null ? (diners[mesaPayDinerIdx] ? diners[mesaPayDinerIdx].name || '' : '') : diners.map(d => d.name || '').filter(n => n).join(', '),
+            customerPhone: '',
             deviceType: detectDeviceType(),
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             date: new Date().toLocaleDateString('es-PA')
@@ -7575,7 +7600,7 @@ document.addEventListener('DOMContentLoaded', function() {
             $('menu-item-badge').value = item.badge || '';
             $('menu-item-price').value = item.price || '';
             $('menu-item-price-grande').value = item.priceGrande != null ? item.priceGrande : '';
-            $('menu-item-only-grande').checked = item.onlyGrande !== false;
+            $('menu-item-only-grande').checked = !!item.onlyGrande;
             menuFormIngredients = [...(item.ingredients || [])];
             menuFormToppings = [...(item.toppings || [])];
 
