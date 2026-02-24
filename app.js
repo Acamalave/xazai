@@ -2980,12 +2980,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 customerPhone: order.customerPhone || '',
                 address: order.address || '',
                 deviceType: order.deviceType || '',
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                date: new Date().toLocaleDateString('es-PA')
+                createdAt: order.createdAt || firebase.firestore.FieldValue.serverTimestamp(),
+                date: order.createdAt ? new Date(order.createdAt.seconds * 1000).toLocaleDateString('es-PA') : new Date().toLocaleDateString('es-PA')
             };
-            db.collection('sales').add(sale).then(() => {
-                // Mark order as converted to avoid duplicates
-                db.collection('orders').doc(orderId).update({ convertedToSale: true });
+            // Use batch to make sale creation + order flag update atomic
+            const batch = db.batch();
+            const saleRef = db.collection('sales').doc();
+            batch.set(saleRef, sale);
+            batch.update(db.collection('orders').doc(orderId), { convertedToSale: true });
+            batch.commit().then(() => {
                 loadTodaySales();
             });
         }).catch(err => console.error('convertOrderToSale error:', err));
@@ -3010,13 +3013,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 const cached = inventoryCache[String(product.id)];
                 if (cached && cached.stockQty !== undefined) {
                     const newStock = cached.stockQty + qty;
-                    batch.set(invRef, { stockQty: newStock, active: true }, { merge: true });
+                    batch.set(invRef, { stockQty: newStock }, { merge: true });
                     inventoryCache[String(product.id)].stockQty = newStock;
-                    inventoryCache[String(product.id)].active = true;
                     hasUpdates = true;
                 }
             });
-            if (hasUpdates) batch.commit().catch(err => console.error('restoreInventory error:', err));
+            if (hasUpdates) {
+                // Mark order so it can't be double-restored
+                batch.update(db.collection('orders').doc(orderId), { inventoryDecremented: false });
+                batch.commit().catch(err => console.error('restoreInventory error:', err));
+            }
         });
     }
 
@@ -3187,14 +3193,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 }).join('')}
             `).join('');
 
-            // Bind qty change events (debounced save)
-            let saveTimeout;
+            // Bind qty change events (per-input debounced save)
             container.querySelectorAll('.inventory-qty-input').forEach(input => {
+                let inputTimeout;
                 input.addEventListener('change', () => {
                     const ingId = input.dataset.ingId;
                     const val = parseInt(input.value) || 0;
-                    clearTimeout(saveTimeout);
-                    saveTimeout = setTimeout(() => {
+                    clearTimeout(inputTimeout);
+                    inputTimeout = setTimeout(() => {
                         db.collection('ingredients').doc(ingId).set({ qty: val }, { merge: true })
                             .then(() => showToast('Stock actualizado', 'success'))
                             .catch(() => showToast('Error guardando stock', 'warning'));
@@ -3207,9 +3213,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load inventory on app start for client filtering + admin sync
     if (typeof db !== 'undefined') {
         db.collection('inventory').onSnapshot(snapshot => {
+            // Rebuild cache from snapshot to clear deleted docs
+            const newCache = {};
             snapshot.forEach(doc => {
-                inventoryCache[doc.id] = doc.data();
+                newCache[doc.id] = doc.data();
             });
+            inventoryCache = newCache;
             if (adminMode) {
                 // Re-render admin inventory if visible
                 const invSection = $('admin-sec-inventario');
@@ -3938,8 +3947,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    let _posProcessing = false;
     function processPOSSale() {
+        if (_posProcessing) return;
         if (posCart.length === 0) return;
+        _posProcessing = true;
         const subtotal = posCart.reduce((s, i) => s + i.price * i.qty, 0);
         const discountAmount = subtotal * (posDiscountPercent / 100);
         const subtotalAfterDiscount = subtotal - discountAmount;
@@ -3999,7 +4011,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (cashInput) { cashInput.value = ''; $('pos-change-amount').textContent = '$0.00'; }
             resetPOSExtras();
             loadTodaySales();
-        }).catch(err => showToast('Error registrando venta', 'warning'));
+            _posProcessing = false;
+        }).catch(err => { _posProcessing = false; showToast('Error registrando venta', 'warning'); });
     }
 
     function loadTodaySales() {
@@ -4128,7 +4141,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // expenseImageBase64 hoisted above (hoisting fix)
 
+    let _expensesInitialized = false;
     function initExpenses() {
+        if (_expensesInitialized) { loadExpenses(); return; }
+        _expensesInitialized = true;
         // Set default date to today
         const dateInput = $('expense-date');
         if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
@@ -4193,8 +4209,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const amount = parseFloat($('expense-amount').value);
         const date = $('expense-date').value;
 
-        if (!description || !amount || !date) {
-            showToast('Completa todos los campos', 'warning');
+        if (!description || !date || isNaN(amount) || amount <= 0) {
+            showToast('Completa todos los campos (monto debe ser positivo)', 'warning');
             return;
         }
 
@@ -4291,7 +4307,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // dashRangeMode, dashRefDate hoisted above (hoisting fix)
 
+    let _dashboardInitialized = false;
     function initDashboard() {
+        if (_dashboardInitialized) { loadDashboard(); return; }
+        _dashboardInitialized = true;
         dashRefDate = new Date();
         dashRangeMode = 'day';
 
@@ -4403,9 +4422,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(() => []);
 
         Promise.all([salesPromise, expensesPromise, ordersPromise]).then(([sales, expenses, orders]) => {
-            renderDashSummary(sales, expenses, orders);
-            renderDashPayments(sales);
-            renderDashTopProducts(sales);
+            // Exclude voided sales from all financial calculations
+            const activeSales = sales.filter(s => !s.voided);
+            renderDashSummary(activeSales, expenses, orders);
+            renderDashPayments(activeSales);
+            renderDashTopProducts(activeSales);
             renderDashRecent(orders, expenses);
         });
     }
@@ -4464,18 +4485,21 @@ document.addEventListener('DOMContentLoaded', function() {
         const counts = {};
         allMethods.forEach(m => { methods[m] = 0; counts[m] = 0; });
         sales.forEach(sale => {
-            const m = (sale.paymentMethod || 'efectivo').toLowerCase();
-            methods[m] = (methods[m] || 0) + (sale.total || 0);
+            let m = (sale.paymentMethod || 'efectivo').toLowerCase();
+            if (!allMethods.includes(m)) m = 'efectivo'; // Map unknown methods to efectivo
+            // Use product revenue (total minus tip and delivery) to match summary
+            const productAmount = (sale.total || 0) - (sale.tip || 0) - (sale.delivery || 0);
+            methods[m] = (methods[m] || 0) + productAmount;
             counts[m] = (counts[m] || 0) + 1;
         });
 
-        const grandTotal = Object.values(methods).reduce((s, v) => s + v, 0) || 1;
+        const grandTotal = Object.values(methods).reduce((s, v) => s + v, 0) || 0;
         const content = $('dash-payments-content');
 
         content.innerHTML = allMethods.map(method => {
             const amount = methods[method];
             const count = counts[method];
-            const pct = Math.round((amount / grandTotal) * 100);
+            const pct = grandTotal > 0 ? Math.round((amount / grandTotal) * 100) : 0;
             return `
             <div class="dash-payment-row">
                 <div style="display:flex;align-items:center;gap:8px;min-width:100px">
@@ -4490,7 +4514,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>`;
         }).join('') + `
             <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-weight:700">
-                <span>Total Cierre</span><span style="color:var(--accent)">$${grandTotal === 1 ? '0.00' : Object.values(methods).reduce((s, v) => s + v, 0).toFixed(2)}</span>
+                <span>Total Cierre</span><span style="color:var(--accent)">$${grandTotal.toFixed(2)}</span>
             </div>`;
     }
 
@@ -4500,8 +4524,9 @@ document.addEventListener('DOMContentLoaded', function() {
             (sale.items || []).forEach(item => {
                 const key = item.name || 'Desconocido';
                 if (!products[key]) products[key] = { name: key, emoji: item.emoji || '', qty: 0, total: 0 };
-                products[key].qty += item.qty || 1;
-                products[key].total += item.total || item.price || 0;
+                const itemQty = item.qty || 1;
+                products[key].qty += itemQty;
+                products[key].total += item.total || ((item.price || 0) * itemQty);
             });
         });
 
@@ -4561,7 +4586,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // RRHH_PERMISSIONS, DEFAULT_ROLES & state variables hoisted above (hoisting fix)
 
+    let _rrhhInitialized = false;
     function initRRHH() {
+        if (_rrhhInitialized) { loadRRHHRoles(); loadRRHHCollaborators(); return; }
+        _rrhhInitialized = true;
         seedDefaultRoles();
         renderRolePermissions();
 
@@ -5158,7 +5186,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // ASISTENCIA STANDALONE
     // ========================================
+    let _attendanceInitialized = false;
     function initAttendance() {
+        if (_attendanceInitialized) return;
+        _attendanceInitialized = true;
         document.querySelectorAll('.att-type-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.att-type-btn').forEach(b => b.classList.remove('active'));
@@ -5485,8 +5516,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 to = new Date(today.getTime() + 86400000);
                 break;
             case 'week':
-                const day = today.getDay();
-                from = new Date(today.getTime() - day * 86400000);
+                const dayOfWeek = today.getDay();
+                const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                from = new Date(today); from.setDate(today.getDate() - mondayOffset);
                 to = new Date(today.getTime() + 86400000);
                 break;
             case 'month':
@@ -5610,7 +5642,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalSales = activeInvoices.reduce((s, inv) => s + inv.total, 0);
         const avg = activeInvoices.length ? totalSales / activeInvoices.length : 0;
 
-        if (countEl) countEl.textContent = factInvoices.length;
+        if (countEl) countEl.textContent = activeInvoices.length;
         if (totalEl) totalEl.textContent = '$' + totalSales.toFixed(2);
         if (avgEl) avgEl.textContent = '$' + avg.toFixed(2);
 
@@ -5839,6 +5871,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!d.createdAt) return;
                 // Skip orders already converted to sales to avoid double-counting
                 if (d.convertedToSale) return;
+                // Skip cancelled orders — they don't represent real transactions
+                if (d.status === 'cancelado') return;
                 const date = new Date(d.createdAt.seconds * 1000);
                 transactions.push({
                     timestamp: date,
@@ -5981,14 +6015,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderBehPaymentTrends(transactions) {
         const container = $('beh-payment-trends');
         if (!container) return;
-        const methods = { efectivo: 0, yappy: 0, tarjeta: 0 };
+        const methods = { efectivo: 0, yappy: 0, tarjeta: 0, ach: 0 };
         transactions.forEach(t => {
             const m = (t.paymentMethod || 'efectivo').toLowerCase();
             if (methods.hasOwnProperty(m)) methods[m]++;
             else methods.efectivo++;
         });
         const total = transactions.length || 1;
-        const labels = { efectivo: 'Efectivo', yappy: 'Yappy', tarjeta: 'Tarjeta' };
+        const labels = { efectivo: 'Efectivo', yappy: 'Yappy', tarjeta: 'Tarjeta', ach: 'ACH' };
         let html = '<h3><i class="fas fa-credit-card"></i> Tendencia de Pagos</h3>';
         Object.entries(methods).forEach(([key, count]) => {
             const pct = (count / total * 100).toFixed(0);
@@ -6994,10 +7028,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    let _mesaProcessing = false;
     function processMesaPayment() {
+        if (_mesaProcessing) return;
         const diners = currentMesa ? (currentMesa.diners || []) : [];
         const payingItems = getMesaPayingItems();
         if (!payingItems.length) { showToast('No hay items para cobrar', 'warning'); return; }
+        _mesaProcessing = true;
 
         const subtotal = payingItems.reduce((s, it) => s + it.price * it.qty, 0);
         const discountAmt = subtotal * (mesaPayDiscount / 100);
@@ -7018,11 +7055,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const sale = {
-            items: payingItems.map(it => ({ name: it.name, emoji: it.emoji, qty: it.qty, price: it.price, size: it.size || '', total: it.price * it.qty })),
+            items: payingItems.map(it => ({ productId: it.productId || null, name: it.name, emoji: it.emoji, qty: it.qty, price: it.price, size: it.size || '', total: it.price * it.qty })),
             subtotal,
             discount: mesaPayDiscount,
             discountAmount: discountAmt,
             tip: mesaPayTip,
+            delivery: 0,
             total,
             paymentMethod: mesaPayMethod,
             paymentDetails,
@@ -7053,7 +7091,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 closeMesa();
             }
             loadTodaySales();
-        }).catch(() => showToast('Error registrando pago', 'warning'));
+            _mesaProcessing = false;
+        }).catch(() => { _mesaProcessing = false; showToast('Error registrando pago', 'warning'); });
     }
 
     // ---- ESTADO DE MESA ----
@@ -7578,18 +7617,18 @@ document.addEventListener('DOMContentLoaded', function() {
             ingredients: menuFormIngredients,
             toppings: menuFormToppings,
             image: menuImageBase64 || '',
-            active: true,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
         if (editingMenuItemId) {
-            // Update existing
+            // Update existing — don't override active state
             db.collection('menu_items').doc(editingMenuItemId).update(data).then(() => {
                 showToast('Producto actualizado', 'success');
                 $('menu-form-overlay').classList.add('hidden');
             }).catch(() => showToast('Error actualizando', 'warning'));
         } else {
             // Create new - generate next ID
+            data.active = true;
             const maxId = menuFirestoreItems.reduce((max, i) => Math.max(max, i.id || 0), 0);
             data.id = maxId + 1;
             data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
