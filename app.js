@@ -2476,8 +2476,9 @@ document.addEventListener('DOMContentLoaded', function() {
             address: address || '',
             scheduledSlot: cleanSlot,
             deviceType: detectDeviceType(),
+            inventoryDecremented: true,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
+        }).then((docRef) => {
             console.log(`Order ${orderId} saved to Firestore`);
             // Auto-decrement inventory for online orders
             decrementInventoryOnSale(sanitizedItems.map(i => ({ name: i.name, qty: i.quantity || 1 })));
@@ -2566,13 +2567,15 @@ document.addEventListener('DOMContentLoaded', function() {
             number: orderNum,
             customerName: currentUser ? currentUser.name : 'Invitado',
             customerPhone: currentUser ? (currentUser.phone || '') : '',
-            items: cart.map(i => ({ name: i.name, emoji: i.emoji, size: i.size, quantity: i.quantity, toppings: i.toppings, total: i.total })),
+            items: cart.map(i => ({ name: i.name, emoji: i.emoji, size: i.size, quantity: i.quantity, price: i.basePrice || i.price || 0, toppings: i.toppings, total: i.total })),
             subtotal, delivery: deliveryFee, deliveryDistance: deliveryDistanceKm, tip: currentTip,
             total: subtotal + deliveryFee + currentTip,
             address: deliveryAddress,
+            paymentMethod: 'efectivo',
             scheduled: scheduledSlot ? `${scheduledSlot.label} ${scheduledSlot.time}` : null,
             status: 'pendiente',
             deviceType: detectDeviceType(),
+            inventoryDecremented: true,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -2993,6 +2996,8 @@ document.addEventListener('DOMContentLoaded', function() {
         db.collection('orders').doc(orderId).get().then(doc => {
             if (!doc.exists) return;
             const order = doc.data();
+            // Only restore if inventory was actually decremented for this order
+            if (!order.inventoryDecremented) return;
             const items = order.items || [];
             if (!items.length) return;
             const batch = db.batch();
@@ -3039,7 +3044,8 @@ document.addEventListener('DOMContentLoaded', function() {
         container.innerHTML = filteredItems.map(item => {
             const inv = inventoryCache[String(item.id)];
             const isActive = inv ? inv.active !== false : true;
-            const qty = inv && inv.qty !== undefined ? inv.qty : '';
+            // Use stockQty (auto-decrement field) for display, fallback to qty
+            const stockQty = inv && inv.stockQty !== undefined ? inv.stockQty : (inv && inv.qty !== undefined ? inv.qty : null);
             const isDualSize = item.priceGrande && !item.onlyGrande;
             const invM = isDualSize ? (inv ? inv.activeM !== false : true) : true;
             const invG = isDualSize ? (inv ? inv.activeG !== false : true) : true;
@@ -3075,7 +3081,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 ${item.image ? `<img src="${item.image}" class="inventory-img" alt="${item.name}">` : `<span class="inventory-emoji">${item.emoji}</span>`}
                 <div class="inventory-info">
                     <div class="inventory-name">${item.name}</div>
-                    <div class="inventory-cat">${item.category}</div>
+                    <div class="inventory-cat">${item.category}${stockQty !== null ? ` · Stock: ${stockQty}` : ''}</div>
                 </div>
                 ${priceDisplay}
                 ${sizeToggles}
@@ -3198,14 +3204,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Load inventory on app start for client filtering
+    // Load inventory on app start for client filtering + admin sync
     if (typeof db !== 'undefined') {
         db.collection('inventory').onSnapshot(snapshot => {
             snapshot.forEach(doc => {
                 inventoryCache[doc.id] = doc.data();
             });
-            // Re-render current view if not admin
-            if (!adminMode) {
+            if (adminMode) {
+                // Re-render admin inventory if visible
+                const invSection = $('admin-sec-inventario');
+                if (invSection && !invSection.classList.contains('hidden')) {
+                    renderInventory();
+                }
+            } else {
                 const activeTab = document.querySelector('.tab.active');
                 if (activeTab) renderCategory(activeTab.dataset.category);
             }
@@ -5520,6 +5531,8 @@ document.addEventListener('DOMContentLoaded', function() {
             ordersSnap.forEach(doc => {
                 const d = doc.data();
                 if (d.status === 'cancelado' && !d.voided) return;
+                // Skip orders already converted to sales to avoid double-counting
+                if (d.convertedToSale) return;
                 factInvoices.push({
                     id: doc.id,
                     type: 'order',
@@ -5824,6 +5837,8 @@ document.addEventListener('DOMContentLoaded', function() {
             ordersSnap.forEach(doc => {
                 const d = doc.data();
                 if (!d.createdAt) return;
+                // Skip orders already converted to sales to avoid double-counting
+                if (d.convertedToSale) return;
                 const date = new Date(d.createdAt.seconds * 1000);
                 transactions.push({
                     timestamp: date,
