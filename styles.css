@@ -16,6 +16,7 @@
     --bg-surface: #16162b;
     --text: #f0e6f6;
     --text-light: #a89bb5;
+    --text-muted: #8a7d96;
     --text-white: #ffffff;
     --border: #2d2d4a;
     --border-light: #3d3d5c;
@@ -328,58 +329,7 @@ body {
 /* ========================================
    HERO
    ======================================== */
-.hero {
-    background: var(--gradient-hero);
-    padding: 70px 40px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-
-.hero::before {
-    content: '';
-    position: absolute;
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(233, 30, 140, 0.08) 0%, transparent 70%);
-    top: -100px;
-    right: -100px;
-    border-radius: 50%;
-}
-
-.hero::after {
-    content: '';
-    position: absolute;
-    width: 300px;
-    height: 300px;
-    background: radial-gradient(circle, rgba(123, 45, 142, 0.1) 0%, transparent 70%);
-    bottom: -80px;
-    left: -60px;
-    border-radius: 50%;
-}
-
-.hero-content { position: relative; z-index: 1; }
-
-.hero h1 {
-    font-size: 44px;
-    font-weight: 800;
-    line-height: 1.15;
-    margin-bottom: 14px;
-    color: var(--text-white);
-}
-
-.hero .highlight {
-    background: var(--gradient-primary);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.hero p {
-    font-size: 17px;
-    color: var(--text-light);
-    font-weight: 300;
-}
+/* .hero section removed — unused */
 
 /* ========================================
    MENU SECTION
@@ -3701,17 +3651,17 @@ body {
     font-weight: 500;
     transform: translateX(120%);
     transition: transform 0.3s ease;
-    border-left: 4px solid;
     color: var(--text);
     border: 1px solid var(--border);
+    border-left: 4px solid var(--border);
 }
 
 .toast.show { transform: translateX(0); }
-.toast-success { border-left: 4px solid #5cb85c !important; }
+.toast-success { border-left: 4px solid #5cb85c; }
 .toast-success i { color: #5cb85c; }
-.toast-warning { border-left: 4px solid #f0ad4e !important; }
+.toast-warning { border-left: 4px solid #f0ad4e; }
 .toast-warning i { color: #f0ad4e; }
-.toast-info { border-left: 4px solid #5bc0de !important; }
+.toast-info { border-left: 4px solid #5bc0de; }
 .toast-info i { color: #5bc0de; }
 
 /* ========================================
@@ -4836,29 +4786,7 @@ body {
 .rrhh-sub-title { font-size: 16px; font-weight: 600; color: var(--text-white); margin: 20px 0 12px; display: flex; align-items: center; gap: 8px; }
 .rrhh-sub-title i { color: var(--accent); font-size: 14px; }
 
-/* Attendance Layout */
-.rrhh-attendance-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.rrhh-attendance-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 24px; }
-.rrhh-attendance-form h3 { font-size: 16px; font-weight: 700; color: var(--text-white); margin-bottom: 14px; }
-.rrhh-attendance-log { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 20px; max-height: calc(100vh - 260px); overflow-y: auto; }
-.rrhh-attendance-log h3 { font-size: 15px; font-weight: 700; color: var(--text-white); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-.rrhh-attendance-log h3 i { color: var(--accent); }
-
-/* Real-Time Clock */
-.rrhh-clock-display { text-align: center; padding: 20px; margin-bottom: 20px; background: rgba(123, 45, 142, 0.08); border-radius: var(--radius-sm); border: 1px solid rgba(123, 45, 142, 0.2); }
-.rrhh-clock-time { font-size: 48px; font-weight: 800; background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: 2px; font-variant-numeric: tabular-nums; }
-.rrhh-clock-date { font-size: 13px; color: var(--text-light); margin-top: 4px; }
-
-/* Attendance Type Buttons */
-.rrhh-att-type-btns { display: flex; gap: 8px; margin: 14px 0; }
-.rrhh-att-type-btn { flex: 1; padding: 12px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-light); border-radius: var(--radius-xs); font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; transition: var(--transition); display: flex; align-items: center; justify-content: center; gap: 8px; }
-.rrhh-att-type-btn.active[data-att-type="entrada"] { background: rgba(92, 184, 92, 0.15); border-color: #5cb85c; color: #5cb85c; }
-.rrhh-att-type-btn.active[data-att-type="salida"] { background: rgba(255, 71, 87, 0.15); border-color: #ff4757; color: #ff4757; }
-
-/* Scan Button */
-.rrhh-scan-btn { width: 100%; padding: 16px; background: var(--gradient-primary); color: white; border: none; border-radius: var(--radius-sm); font-family: 'Poppins', sans-serif; font-size: 16px; font-weight: 700; cursor: pointer; transition: var(--transition); display: flex; align-items: center; justify-content: center; gap: 10px; }
-.rrhh-scan-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(233, 30, 140, 0.4); }
-.rrhh-scan-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* RRHH inline attendance styles removed — unused (standalone att-* used instead) */
 
 /* Today's Log Entries */
 .rrhh-log-entry { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
@@ -4964,7 +4892,7 @@ body {
 .att-start-scan-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 30px rgba(233, 30, 140, 0.5); }
 
 /* Scan Overlay */
-.att-scan-overlay { position: fixed; inset: 0; background: #000; z-index: 1100; display: flex; align-items: center; justify-content: center; }
+.att-scan-overlay { position: fixed; inset: 0; background: #000; z-index: 1200; display: flex; align-items: center; justify-content: center; }
 .att-scan-overlay.hidden { display: none; }
 .att-scan-container { width: 100%; max-width: 500px; position: relative; padding: 0 16px; }
 .att-scan-close { position: absolute; top: 8px; right: 24px; z-index: 20; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255,255,255,0.2); color: white; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: var(--transition); }
@@ -6606,7 +6534,7 @@ body {
 .mesa-btn-close { background: var(--gradient-primary); }
 
 /* Modal de pago de mesa */
-#mesa-pay-modal { z-index: 1100; }
+#mesa-pay-modal { z-index: 1150; }
 .mesa-pay-content {
     background: var(--bg-card);
     border: 1px solid var(--border);

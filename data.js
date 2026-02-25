@@ -187,6 +187,36 @@ const MENU_ITEMS = [
         badge: 'Fresh Cut',
         onlyGrande: true
     },
+    {
+        id: 26,
+        name: 'The Choco-Gorilla',
+        category: 'bowls',
+        tagline: 'Energía densa. Cero culpas.',
+        description: 'Denso, saciante y con textura de helado. El pre-entreno definitivo para los amantes del cacao. Energía densa y sabor profundo. La combinación clásica de banana, cacao puro y almendras que nunca falla.',
+        ingredients: ['Banana Congelada', 'Cacao en polvo', 'Leche de Almendras'],
+        toppings: ['Granola Crujiente', 'Banana en Rodajas', 'Mantequilla de Almendras', 'Chispas de Chocolate'],
+        price: 5.95,
+        priceGrande: 9.50,
+        image: 'images/choco-gorilla.jpg',
+        emoji: '🍫',
+        badge: 'Pre-Entreno',
+        onlyGrande: false
+    },
+    {
+        id: 27,
+        name: 'The Laila Bowl',
+        category: 'bowls',
+        tagline: 'Fuchsia Power. Sabor tropical sin filtros.',
+        description: 'Vibrante, tropical y súper refrescante. El poder visual de la Pitaya en su máximo esplendor. El bowl más ligero y fotogénico del menú. Perfecto para el clima de Panamá y para quienes buscan un perfil frutal exótico y dulce-ácido.',
+        ingredients: ['Pulpa de Pitaya', 'Piña Congelada', 'Banana Congelada', 'Agua de Coco'],
+        toppings: ['Granola Crujiente', 'Banana en Rodajas', 'Mango en Cubitos', 'Piña en Cubitos', 'Fresa Laminada', 'Coco Rallado'],
+        price: 6.50,
+        priceGrande: 10.50,
+        image: 'images/laila-bowl.jpg',
+        emoji: '🩷',
+        badge: 'The Pink Dragon',
+        onlyGrande: false
+    },
 
     // ==================== SMOOTHIES ====================
     {
@@ -460,12 +490,12 @@ const EXTRA_TOPPINGS = [
 // BUILD YOUR OWN BOWL OPTIONS
 const BUILD_OPTIONS = {
     bases: [
-        { id: 'b1', name: 'Açaí', price: 5.00, emoji: '💜' },
-        { id: 'b2', name: 'Pitaya', price: 5.00, emoji: '🩷' },
-        { id: 'b3', name: 'Arándanos', price: 4.50, emoji: '🫐' },
-        { id: 'b4', name: 'Fresas', price: 4.00, emoji: '🍓' },
-        { id: 'b5', name: 'Mango', price: 4.00, emoji: '🥭' },
-        { id: 'b6', name: 'Mix Tropical', price: 4.50, emoji: '🌴' }
+        { id: 'b1', name: 'Açaí', price: 7.00, emoji: '💜' },
+        { id: 'b2', name: 'Pitaya', price: 7.00, emoji: '🩷' },
+        { id: 'b3', name: 'Arándanos', price: 7.00, emoji: '🫐' },
+        { id: 'b4', name: 'Fresas', price: 7.00, emoji: '🍓' },
+        { id: 'b5', name: 'Mango', price: 7.00, emoji: '🥭' },
+        { id: 'b6', name: 'Mix Tropical', price: 7.00, emoji: '🌴' }
     ],
     proteins: [
         { id: 'p1', name: 'Banana', price: 1.00, emoji: '🍌' },
@@ -488,6 +518,7 @@ const BUILD_OPTIONS = {
         { id: 'd2', name: 'Leche Condensada', price: 0.75, emoji: '🥛' },
         { id: 'd3', name: 'Nutella', price: 1.00, emoji: '🍫' },
         { id: 'd4', name: 'Mantequilla de Maní', price: 1.00, emoji: '🥜' },
+        { id: 'd6', name: 'Mantequilla de Almendras', price: 1.00, emoji: '🌰' },
         { id: 'd5', name: 'Sin Drizzle', price: 0.00, emoji: '✨' }
     ]
 };
