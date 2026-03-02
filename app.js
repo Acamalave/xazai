@@ -806,11 +806,23 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const isCancelled = order.status === 'cancelado';
+        const oType = order.orderType || 'delivery';
 
-        // Status stepper for active orders
-        const steps = ['pendiente', 'preparando', 'listo', 'en_camino', 'entregado'];
-        const stepLabels = ['Recibido', 'Preparando', 'Listo', 'En Camino', 'Entregado'];
-        const stepIcons = ['fa-inbox', 'fa-fire-burner', 'fa-bell', 'fa-motorcycle', 'fa-check-double'];
+        // Status stepper for active orders — adapted per order type
+        let steps, stepLabels, stepIcons;
+        if (oType === 'pickup') {
+            steps = ['pendiente', 'preparando', 'listo', 'entregado'];
+            stepLabels = ['Recibido', 'Preparando', 'Listo para Retirar', 'Retirado'];
+            stepIcons = ['fa-inbox', 'fa-fire-burner', 'fa-shopping-bag', 'fa-check-double'];
+        } else if (oType === 'dine_in') {
+            steps = ['pendiente', 'preparando', 'listo', 'entregado'];
+            stepLabels = ['Recibido', 'Preparando', 'Listo', 'Servido'];
+            stepIcons = ['fa-inbox', 'fa-fire-burner', 'fa-bell', 'fa-check-double'];
+        } else {
+            steps = ['pendiente', 'preparando', 'listo', 'en_camino', 'entregado'];
+            stepLabels = ['Recibido', 'Preparando', 'Listo', 'En Camino', 'Entregado'];
+            stepIcons = ['fa-inbox', 'fa-fire-burner', 'fa-bell', 'fa-motorcycle', 'fa-check-double'];
+        }
         const currentStepIdx = steps.indexOf(order.status);
 
         let stepperHTML = '';
@@ -837,11 +849,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const statusLabels = {
             pendiente: 'Recibido',
             preparando: 'Preparando',
-            listo: 'Listo',
+            listo: oType === 'pickup' ? 'Listo para Retirar' : 'Listo',
             en_camino: 'En Camino',
-            entregado: 'Entregado',
+            entregado: oType === 'pickup' ? 'Retirado' : (oType === 'dine_in' ? 'Servido' : 'Entregado'),
             cancelado: 'Cancelado'
         };
+
+        const orderTypeLabels = { delivery: 'Delivery', pickup: 'Pickup', dine_in: 'En local' };
+        const orderTypeIcons = { delivery: 'fa-motorcycle', pickup: 'fa-shopping-bag', dine_in: 'fa-utensils' };
 
         const itemsSummary = items.slice(0, 3).map(i =>
             `${i.emoji || '📦'} ${i.name} x${i.qty || i.quantity || 1}`
@@ -854,7 +869,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         <strong class="mp-order-number">${order.number || ''}</strong>
                         <span class="mp-order-date">${dateStr}</span>
                     </div>
-                    <span class="order-status status-${order.status}">${statusLabels[order.status] || order.status}</span>
+                    <div class="mp-order-header-right">
+                        <span class="order-type-badge badge-${oType}"><i class="fas ${orderTypeIcons[oType] || 'fa-motorcycle'}"></i> ${orderTypeLabels[oType] || 'Delivery'}</span>
+                        <span class="order-status status-${order.status}">${statusLabels[order.status] || order.status}</span>
+                    </div>
                 </div>
                 ${stepperHTML}
                 <div class="mp-order-items">${itemsSummary}</div>
@@ -928,21 +946,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // HOME ORDER TRACKER (animated)
     // ========================================
     function renderHomeOrderTracker(order) {
-        const trackerSteps = [
-            { status: 'pendiente', icon: 'fa-inbox', label: 'Recibido', msg: 'Tu orden fue recibida exitosamente' },
-            { status: 'preparando', icon: 'fa-fire-burner', label: 'Preparando', msg: 'Nuestro equipo está preparando tu pedido' },
-            { status: 'en_camino', icon: 'fa-motorcycle', label: 'En Camino', msg: 'Tu pedido va en camino hacia ti' },
-            { status: 'entregado', icon: 'fa-check-double', label: 'Entregado', msg: '¡Pedido entregado! ¡Buen provecho!' }
-        ];
+        const oType = order.orderType || 'delivery';
 
-        // Map listo → same index as en_camino (step 2) but shows as active/preparing
-        const statusToIdx = {
-            'pendiente': 0,
-            'preparando': 1,
-            'listo': 2, // Listo maps to before en_camino (shows as preparing done, en_camino next)
-            'en_camino': 2,
-            'entregado': 3
-        };
+        let trackerSteps, statusToIdx;
+        if (oType === 'pickup') {
+            trackerSteps = [
+                { status: 'pendiente', icon: 'fa-inbox', label: 'Recibido', msg: 'Tu orden fue recibida exitosamente' },
+                { status: 'preparando', icon: 'fa-fire-burner', label: 'Preparando', msg: 'Nuestro equipo está preparando tu pedido' },
+                { status: 'listo', icon: 'fa-shopping-bag', label: 'Listo para Retirar', msg: 'Tu pedido está listo, ven a recogerlo' },
+                { status: 'entregado', icon: 'fa-check-double', label: 'Retirado', msg: '¡Pedido retirado! ¡Buen provecho!' }
+            ];
+            statusToIdx = { 'pendiente': 0, 'preparando': 1, 'listo': 2, 'entregado': 3 };
+        } else if (oType === 'dine_in') {
+            trackerSteps = [
+                { status: 'pendiente', icon: 'fa-inbox', label: 'Recibido', msg: 'Tu orden fue recibida exitosamente' },
+                { status: 'preparando', icon: 'fa-fire-burner', label: 'Preparando', msg: 'Nuestro equipo está preparando tu pedido' },
+                { status: 'listo', icon: 'fa-bell', label: 'Listo', msg: 'Tu pedido está listo, será servido en tu mesa' },
+                { status: 'entregado', icon: 'fa-check-double', label: 'Servido', msg: '¡Pedido servido! ¡Buen provecho!' }
+            ];
+            statusToIdx = { 'pendiente': 0, 'preparando': 1, 'listo': 2, 'entregado': 3 };
+        } else {
+            trackerSteps = [
+                { status: 'pendiente', icon: 'fa-inbox', label: 'Recibido', msg: 'Tu orden fue recibida exitosamente' },
+                { status: 'preparando', icon: 'fa-fire-burner', label: 'Preparando', msg: 'Nuestro equipo está preparando tu pedido' },
+                { status: 'en_camino', icon: 'fa-motorcycle', label: 'En Camino', msg: 'Tu pedido va en camino hacia ti' },
+                { status: 'entregado', icon: 'fa-check-double', label: 'Entregado', msg: '¡Pedido entregado! ¡Buen provecho!' }
+            ];
+            statusToIdx = {
+                'pendiente': 0, 'preparando': 1,
+                'listo': 2, 'en_camino': 2, 'entregado': 3
+            };
+        }
 
         const currentIdx = statusToIdx[order.status] !== undefined ? statusToIdx[order.status] : 0;
         const isListo = order.status === 'listo';
@@ -964,26 +998,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Current message
         let currentMsg = '';
-        if (isListo) {
+        if (isListo && oType === 'delivery') {
             currentMsg = 'Tu pedido está listo, pronto saldrá en camino';
+        } else if (isListo) {
+            // For pickup/dine_in, listo is a direct step with its own message
+            currentMsg = trackerSteps[currentIdx] ? trackerSteps[currentIdx].msg : '';
         } else {
-            currentMsg = trackerSteps[currentIdx].msg;
+            currentMsg = trackerSteps[currentIdx] ? trackerSteps[currentIdx].msg : '';
         }
 
         let stepsHTML = '';
+        const isDeliveryListo = isListo && oType === 'delivery';
         trackerSteps.forEach((step, idx) => {
             let cls = '';
             if (idx < currentIdx) cls = 'completed';
             else if (idx === currentIdx) {
-                cls = isListo && idx === 2 ? 'pending' : 'active';
-                // If listo, mark step 1 (preparando) as completed instead
-                if (isListo && idx === 2) cls = 'pending';
+                cls = isDeliveryListo && idx === 2 ? 'pending' : 'active';
+                if (isDeliveryListo && idx === 2) cls = 'pending';
             } else cls = 'pending';
 
-            // For listo status: steps 0,1 completed, step 2 (en_camino) pending with special state
-            if (isListo) {
+            // For delivery listo status: steps 0,1 completed, step 2 (en_camino) pending with special state
+            if (isDeliveryListo) {
                 if (idx < 2) cls = 'completed';
-                else if (idx === 2) cls = 'active'; // Show en_camino as "next up" with pulse
+                else if (idx === 2) cls = 'active';
                 else cls = 'pending';
             }
 
@@ -996,7 +1033,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (idx < trackerSteps.length - 1) {
                 let lineCls = '';
-                if (isListo) {
+                if (isDeliveryListo) {
                     lineCls = idx < 1 ? 'completed' : (idx === 1 ? 'active' : 'pending');
                 } else {
                     lineCls = idx < currentIdx ? 'completed' : (idx === currentIdx ? 'active' : 'pending');
@@ -1645,8 +1682,35 @@ document.addEventListener('DOMContentLoaded', function() {
             openLoginModal();
             return;
         }
-        showPaymentModal();
+        showOrderTypeModal();
     }
+
+    // ========================================
+    // ORDER TYPE SELECTION MODAL
+    // ========================================
+    function showOrderTypeModal() {
+        $('order-type-modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeOrderTypeModal() {
+        $('order-type-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+
+    // Bind order type modal events
+    $('order-type-modal-close').addEventListener('click', closeOrderTypeModal);
+    $('order-type-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'order-type-modal') closeOrderTypeModal();
+    });
+
+    document.querySelectorAll('.order-type-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentOrderType = btn.dataset.orderType;
+            closeOrderTypeModal();
+            showPaymentModal();
+        });
+    });
 
     // High demand banner helper (injected into payment modal)
     function getHighDemandBanner() {
@@ -1688,9 +1752,22 @@ document.addEventListener('DOMContentLoaded', function() {
             scheduledBanner.classList.add('hidden');
         }
 
-        // Initialize map
-        initDeliveryMap();
+        // Adapt modal based on order type
+        const addressSection = document.querySelector('.payment-address');
+        const deliveryLine = document.querySelector('.payment-line-delivery');
+        if (currentOrderType === 'delivery') {
+            if (addressSection) addressSection.classList.remove('hidden');
+            if (deliveryLine) deliveryLine.classList.remove('hidden');
+            initDeliveryMap();
+        } else {
+            // Pickup or dine-in: hide map/address, zero delivery fee
+            if (addressSection) addressSection.classList.add('hidden');
+            if (deliveryLine) deliveryLine.classList.add('hidden');
+            currentDeliveryFee = 0;
+            deliveryDistanceKm = 0;
+        }
 
+        updatePaymentTotals();
         paymentModal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
     }
@@ -1700,7 +1777,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const total = subtotal + currentDeliveryFee + currentTip;
 
         $('payment-subtotal').textContent = '$' + subtotal.toFixed(2);
-        $('payment-delivery').textContent = currentDeliveryFee > 0 ? '$' + currentDeliveryFee.toFixed(2) : 'Selecciona ubicación';
+        if (currentOrderType === 'delivery') {
+            $('payment-delivery').textContent = currentDeliveryFee > 0 ? '$' + currentDeliveryFee.toFixed(2) : 'Selecciona ubicación';
+        }
         $('payment-tip-amount').textContent = '$' + currentTip.toFixed(2);
         $('payment-total').textContent = '$' + total.toFixed(2);
     }
@@ -1767,6 +1846,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function closePaymentModal() {
         $('payment-modal').classList.add('hidden');
         document.body.style.overflow = '';
+        // Restore address section visibility for next use
+        const addressSection = document.querySelector('.payment-address');
+        const deliveryLine = document.querySelector('.payment-line-delivery');
+        if (addressSection) addressSection.classList.remove('hidden');
+        if (deliveryLine) deliveryLine.classList.remove('hidden');
+        currentOrderType = 'delivery';
     }
 
     // ========================================
@@ -1864,6 +1949,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const STORE_LNG = -79.4676096;
     let currentDeliveryFee = 0;
     let deliveryDistanceKm = 0;
+    let currentOrderType = 'delivery'; // 'delivery' | 'pickup' | 'dine_in'
 
     // Haversine formula — distance in km between two lat/lng points
     function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -2304,16 +2390,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Event: Click on Yappy button
         btnYappy.addEventListener('eventClick', async () => {
-            // Validate delivery location on map
-            if (!mapMarker) {
+            // Validate delivery location on map (only for delivery)
+            if (currentOrderType === 'delivery' && !mapMarker) {
                 showToast('Selecciona tu ubicación de entrega en el mapa', 'error');
                 const mapEl = $('map-container');
                 if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth' });
                 return;
             }
-            // Validate delivery address
-            const deliveryAddress = $('delivery-address') ? $('delivery-address').value.trim() : '';
-            if (!deliveryAddress) {
+            // Validate delivery address (only for delivery)
+            const deliveryAddress = currentOrderType === 'delivery' ? ($('delivery-address') ? $('delivery-address').value.trim() : '') : (currentOrderType === 'pickup' ? 'Retiro en local' : 'Comer en local');
+            if (currentOrderType === 'delivery' && !deliveryAddress) {
                 showToast('Por favor ingresa tu dirección de entrega', 'error');
                 if ($('delivery-address')) $('delivery-address').focus();
                 return;
@@ -2504,6 +2590,7 @@ document.addEventListener('DOMContentLoaded', function() {
             tip: tipAmount || 0,
             total: total || (cart.reduce((s, i) => s + i.total, 0) + deliveryFee + (tipAmount || 0)),
             status: status,
+            orderType: currentOrderType,
             paymentMethod: 'yappy',
             paymentConfirmed: false,
             customerName: currentUser ? (currentUser.name || 'Invitado') : 'Invitado',
@@ -2599,16 +2686,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (_orderDirectProcessing) return;
         if (cart.length === 0) return;
         _orderDirectProcessing = true;
-        // Validate delivery location on map
-        if (!mapMarker) {
+        // Validate delivery location on map (only for delivery)
+        if (currentOrderType === 'delivery' && !mapMarker) {
             showToast('Selecciona tu ubicación de entrega en el mapa', 'error');
             const mapEl = $('map-container');
             if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth' });
             _orderDirectProcessing = false;
             return;
         }
-        const deliveryAddress = $('delivery-address') ? $('delivery-address').value.trim() : '';
-        if (!deliveryAddress) {
+        const deliveryAddress = currentOrderType === 'delivery' ? ($('delivery-address') ? $('delivery-address').value.trim() : '') : (currentOrderType === 'pickup' ? 'Retiro en local' : 'Comer en local');
+        if (currentOrderType === 'delivery' && !deliveryAddress) {
             showToast('Por favor ingresa tu dirección de entrega', 'error');
             if ($('delivery-address')) $('delivery-address').focus();
             _orderDirectProcessing = false;
@@ -2627,6 +2714,7 @@ document.addEventListener('DOMContentLoaded', function() {
             subtotal, delivery: deliveryFee, deliveryDistance: deliveryDistanceKm, tip: currentTip,
             total: subtotal + deliveryFee + currentTip,
             address: deliveryAddress,
+            orderType: currentOrderType,
             paymentMethod: 'efectivo',
             scheduledSlot: scheduledSlot ? { value: scheduledSlot.value || '', label: scheduledSlot.label || '', time: scheduledSlot.time || '' } : null,
             date: getDateString(),
@@ -2945,16 +3033,46 @@ document.addEventListener('DOMContentLoaded', function() {
             const items = order.items || [];
             const dateStr = (order.createdAt && order.createdAt.seconds) ? new Date(order.createdAt.seconds * 1000).toLocaleString('es-PA') : '';
             const isNew = order.status === 'pendiente';
+            const oType = order.orderType || 'delivery';
+            const orderTypeLabels = { delivery: 'Delivery', pickup: 'Pickup', dine_in: 'En local' };
+            const orderTypeIcons = { delivery: 'fa-motorcycle', pickup: 'fa-shopping-bag', dine_in: 'fa-utensils' };
+            const isNonDelivery = oType === 'pickup' || oType === 'dine_in';
+
+            // Adapt action buttons per order type
+            let actionButtons = '';
+            if (order.status === 'esperando_pago') {
+                actionButtons += `<span style="color:#ff6b6b;font-size:12px"><i class="fas fa-clock"></i> Pago Yappy no confirmado</span>`;
+            }
+            if (order.status === 'pendiente') {
+                actionButtons += `<button class="order-action-btn btn-preparando" data-order-id="${order.id}">Preparando</button>`;
+            }
+            if (order.status === 'preparando') {
+                actionButtons += `<button class="order-action-btn btn-listo" data-order-id="${order.id}">Listo</button>`;
+            }
+            if (order.status === 'listo') {
+                if (isNonDelivery) {
+                    actionButtons += `<button class="order-action-btn btn-entregado" data-order-id="${order.id}">${oType === 'pickup' ? 'Retirado' : 'Servido'}</button>`;
+                } else {
+                    actionButtons += `<button class="order-action-btn btn-encamino" data-order-id="${order.id}">En Camino</button>`;
+                }
+            }
+            if (order.status === 'en_camino') {
+                actionButtons += `<button class="order-action-btn btn-entregado" data-order-id="${order.id}">Entregado</button>`;
+            }
+
             return `
             <div class="order-card ${isNew ? 'order-new' : ''}">
                 <div class="order-header">
                     <div><strong>${order.number || order.id}</strong><span class="order-date">${dateStr}</span></div>
-                    <span class="order-status status-${order.status}">${adminStatusLabels[order.status] || order.status}</span>
+                    <div class="order-header-right">
+                        <span class="order-type-badge badge-${oType}"><i class="fas ${orderTypeIcons[oType]}"></i> ${orderTypeLabels[oType]}</span>
+                        <span class="order-status status-${order.status}">${adminStatusLabels[order.status] || order.status}</span>
+                    </div>
                 </div>
                 <div class="order-customer-info">
                     <span class="order-customer-name"><i class="fas fa-user"></i> ${escapeHTML(order.customerName) || 'Invitado'}</span>
                     ${order.customerPhone ? `<span class="order-customer-phone"><i class="fas fa-phone"></i> ${escapeHTML(order.customerPhone)}</span>` : ''}
-                    ${order.address ? `<span class="order-customer-address"><i class="fas fa-map-marker-alt"></i> ${escapeHTML(order.address)}</span>` : ''}
+                    ${order.address && oType === 'delivery' ? `<span class="order-customer-address"><i class="fas fa-map-marker-alt"></i> ${escapeHTML(order.address)}</span>` : ''}
                 </div>
                 <div class="order-items-list">
                     ${items.map(item => `<div class="order-item-line"><span>${escapeHTML(item.emoji) || ''} ${escapeHTML(item.name)} x${item.quantity || item.qty || 1} (${escapeHTML(item.size) || ''})</span><span>$${(item.total || 0).toFixed(2)}</span></div>${item.note ? `<div class="order-item-note"><i class="fas fa-sticky-note"></i> ${escapeHTML(item.note)}</div>` : ''}`).join('')}
@@ -2965,11 +3083,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 ${order.status === 'cancelado' && order.cancelReason ? `<div class="order-cancel-reason"><i class="fas fa-ban"></i> ${escapeHTML(order.cancelReason)}</div>` : ''}
                 <div class="order-actions">
-                    ${order.status === 'esperando_pago' ? `<span style="color:#ff6b6b;font-size:12px"><i class="fas fa-clock"></i> Pago Yappy no confirmado</span>` : ''}
-                    ${order.status === 'pendiente' ? `<button class="order-action-btn btn-preparando" data-order-id="${order.id}">Preparando</button>` : ''}
-                    ${order.status === 'preparando' ? `<button class="order-action-btn btn-listo" data-order-id="${order.id}">Listo</button>` : ''}
-                    ${order.status === 'listo' ? `<button class="order-action-btn btn-encamino" data-order-id="${order.id}">En Camino</button>` : ''}
-                    ${order.status === 'en_camino' ? `<button class="order-action-btn btn-entregado" data-order-id="${order.id}">Entregado</button>` : ''}
+                    ${actionButtons}
                     ${canCancel(order.status) ? `<button class="order-action-btn btn-cancelar" data-cancel-id="${order.id}">Cancelar</button>` : ''}
                 </div>
                 <div class="cancel-form hidden" id="cancel-form-${order.id}">

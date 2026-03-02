@@ -1135,6 +1135,42 @@
         </div>
     </div>
 
+    <!-- ORDER TYPE SELECTION MODAL -->
+    <div class="modal-overlay hidden" id="order-type-modal">
+        <div class="order-type-modal-content">
+            <button class="modal-close" id="order-type-modal-close"><i class="fas fa-times"></i></button>
+            <div class="order-type-header">
+                <h2><i class="fas fa-concierge-bell"></i> ¿Cómo quieres tu pedido?</h2>
+            </div>
+            <div class="order-type-options">
+                <button class="order-type-btn" data-order-type="delivery">
+                    <div class="order-type-icon"><i class="fas fa-motorcycle"></i></div>
+                    <div class="order-type-info">
+                        <span class="order-type-label">Delivery</span>
+                        <span class="order-type-desc">Te lo llevamos a tu ubicación</span>
+                    </div>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="order-type-btn" data-order-type="pickup">
+                    <div class="order-type-icon"><i class="fas fa-shopping-bag"></i></div>
+                    <div class="order-type-info">
+                        <span class="order-type-label">Recoger en el local</span>
+                        <span class="order-type-desc">Pasas a buscarlo cuando esté listo</span>
+                    </div>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="order-type-btn" data-order-type="dine_in">
+                    <div class="order-type-icon"><i class="fas fa-utensils"></i></div>
+                    <div class="order-type-info">
+                        <span class="order-type-label">Comer en el local</span>
+                        <span class="order-type-desc">Disfrútalo aquí en Xazai</span>
+                    </div>
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- PAYMENT MODAL (Yappy) -->
     <div class="modal-overlay hidden" id="payment-modal">
         <div class="payment-modal-content">
