@@ -428,7 +428,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!currentUser) {
                 openLoginModal();
             } else {
-                showPaymentModal();
+                showOrderTypeModal();
             }
         }
     });
@@ -601,8 +601,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // If came from checkout, show payment modal
-        if (cart.length > 0) showPaymentModal();
+        // If came from checkout, show order type selection
+        if (cart.length > 0) showOrderTypeModal();
     });
 
     btnGuest.addEventListener('click', () => {
@@ -612,7 +612,7 @@ document.addEventListener('DOMContentLoaded', function() {
         logoutBtn.classList.remove('hidden');
         localStorage.setItem('xazai_user', JSON.stringify(currentUser));
         closeLoginModal();
-        if (cart.length > 0) showPaymentModal();
+        if (cart.length > 0) showOrderTypeModal();
     });
 
     // ========================================
