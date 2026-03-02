@@ -8217,3 +8217,87 @@ body {
     gap: 8px;
     flex-shrink: 0;
 }
+
+/* ========================================
+   SITE FOOTER
+   ======================================== */
+.site-footer {
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    padding: 32px 20px 24px;
+    text-align: center;
+}
+
+/* Hide footer when admin is visible */
+#admin-dashboard:not(.hidden) ~ .site-footer {
+    display: none;
+}
+
+.footer-inner {
+    max-width: 480px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+
+.footer-logo {
+    height: 36px;
+    width: auto;
+    opacity: 0.9;
+}
+
+.footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 16px;
+}
+
+.footer-links a {
+    color: var(--text-light);
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.footer-links a:hover {
+    color: var(--accent);
+}
+
+.footer-links a i {
+    font-size: 13px;
+    color: var(--accent);
+}
+
+.footer-bottom {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 4px 8px;
+    font-size: 12px;
+    color: var(--text-muted, rgba(255,255,255,0.35));
+}
+
+.footer-sep {
+    opacity: 0.4;
+}
+
+.footer-dev {
+    color: var(--text-muted, rgba(255,255,255,0.35));
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer-dev:hover {
+    color: var(--accent);
+}
+
+.footer-dev strong {
+    font-weight: 600;
+}
