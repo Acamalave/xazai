@@ -7713,8 +7713,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             menuFirestoreItems = [];
+            const seenIds = new Set();
             snapshot.forEach(doc => {
-                menuFirestoreItems.push({ _docId: doc.id, ...doc.data() });
+                const data = doc.data();
+                if (!seenIds.has(data.id)) {
+                    seenIds.add(data.id);
+                    menuFirestoreItems.push({ _docId: doc.id, ...data });
+                }
             });
             menuItemsLoaded = true;
             // Re-render admin menu if in admin mode
@@ -7733,6 +7738,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function migrateMenuToFirestore() {
+        // Guard: check if items already exist to prevent duplicate migration
+        db.collection('menu_items').limit(1).get().then(check => {
+            if (!check.empty) return; // Already migrated
+            _doMigrateMenu();
+        });
+    }
+
+    function _doMigrateMenu() {
         const batch = db.batch();
         MENU_ITEMS.forEach(item => {
             const docRef = db.collection('menu_items').doc();
