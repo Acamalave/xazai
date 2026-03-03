@@ -3239,6 +3239,7 @@ body {
 .dash-payment-bar-fill.efectivo { background: #5cb85c; }
 .dash-payment-bar-fill.yappy { background: #5bc0de; }
 .dash-payment-bar-fill.tarjeta { background: #f0ad4e; }
+.dash-payment-bar-fill.pedidosya { background: #ff3246; }
 
 .dash-payment-amount {
     font-size: 13px;
@@ -5002,6 +5003,7 @@ body {
 .beh-pay-bar-fill.efectivo { background: #5cb85c; }
 .beh-pay-bar-fill.yappy { background: #5bc0de; }
 .beh-pay-bar-fill.tarjeta { background: #f0ad4e; }
+.beh-pay-bar-fill.pedidosya { background: #ff3246; }
 .beh-pay-value { font-size: 13px; font-weight: 600; color: var(--text-white); min-width: 50px; text-align: right; }
 .beh-pay-pct { font-size: 11px; color: var(--text-light); min-width: 40px; text-align: right; }
 

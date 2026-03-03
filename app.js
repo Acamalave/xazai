@@ -4164,6 +4164,8 @@ document.addEventListener('DOMContentLoaded', function() {
             details.reference = ($('pos-ach-ref') ? $('pos-ach-ref').value : '').trim();
         } else if (posPaymentMethod === 'yappy') {
             details.reference = ($('pos-yappy-ref') ? $('pos-yappy-ref').value : '').trim();
+        } else if (posPaymentMethod === 'pedidosya') {
+            details.reference = ($('pos-pedidosya-ref') ? $('pos-pedidosya-ref').value : '').trim();
         }
         return details;
     }
@@ -4176,7 +4178,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const custPhone = $('pos-customer-phone');
         if (custPhone) custPhone.value = '';
         document.querySelectorAll('.pos-payment-details').forEach(d => d.classList.add('hidden'));
-        ['pos-tarjeta-ref', 'pos-ach-ref', 'pos-yappy-ref'].forEach(id => {
+        ['pos-tarjeta-ref', 'pos-ach-ref', 'pos-yappy-ref', 'pos-pedidosya-ref'].forEach(id => {
             const el = $(id); if (el) el.value = '';
         });
     }
@@ -4724,10 +4726,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderDashPayments(sales) {
         // FIX #11: Include ACH in payment methods
-        const allMethods = ['efectivo', 'yappy', 'tarjeta', 'ach'];
-        const methodLabels = { 'efectivo': 'Efectivo', 'yappy': 'Yappy', 'tarjeta': 'Tarjeta', 'ach': 'ACH' };
-        const methodColors = { 'efectivo': 'cash', 'yappy': 'yappy', 'tarjeta': 'card', 'ach': 'card' };
-        const methodIcons = { 'efectivo': 'fa-money-bill-wave', 'yappy': 'fa-mobile-alt', 'tarjeta': 'fa-credit-card', 'ach': 'fa-university' };
+        const allMethods = ['efectivo', 'yappy', 'tarjeta', 'ach', 'pedidosya'];
+        const methodLabels = { 'efectivo': 'Efectivo', 'yappy': 'Yappy', 'tarjeta': 'Tarjeta', 'ach': 'ACH', 'pedidosya': 'PedidosYa' };
+        const methodColors = { 'efectivo': 'cash', 'yappy': 'yappy', 'tarjeta': 'card', 'ach': 'card', 'pedidosya': 'pedidosya' };
+        const methodIcons = { 'efectivo': 'fa-money-bill-wave', 'yappy': 'fa-mobile-alt', 'tarjeta': 'fa-credit-card', 'ach': 'fa-university', 'pedidosya': 'fa-motorcycle' };
 
         const methods = {};
         const counts = {};
@@ -6331,14 +6333,14 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderBehPaymentTrends(transactions) {
         const container = $('beh-payment-trends');
         if (!container) return;
-        const methods = { efectivo: 0, yappy: 0, tarjeta: 0, ach: 0 };
+        const methods = { efectivo: 0, yappy: 0, tarjeta: 0, ach: 0, pedidosya: 0 };
         transactions.forEach(t => {
             const m = (t.paymentMethod || 'efectivo').toLowerCase();
             if (methods.hasOwnProperty(m)) methods[m]++;
             else methods.efectivo++;
         });
         const total = transactions.length || 1;
-        const labels = { efectivo: 'Efectivo', yappy: 'Yappy', tarjeta: 'Tarjeta', ach: 'ACH' };
+        const labels = { efectivo: 'Efectivo', yappy: 'Yappy', tarjeta: 'Tarjeta', ach: 'ACH', pedidosya: 'PedidosYa' };
         let html = '<h3><i class="fas fa-credit-card"></i> Tendencia de Pagos</h3>';
         Object.entries(methods).forEach(([key, count]) => {
             const pct = (count / total * 100).toFixed(0);
@@ -7389,6 +7391,8 @@ document.addEventListener('DOMContentLoaded', function() {
             paymentDetails = { reference: ($('mesa-ach-ref') || {}).value || '' };
         } else if (mesaPayMethod === 'yappy') {
             paymentDetails = { reference: ($('mesa-yappy-ref') || {}).value || '' };
+        } else if (mesaPayMethod === 'pedidosya') {
+            paymentDetails = { reference: ($('mesa-pedidosya-ref') || {}).value || '' };
         }
 
         const sale = {

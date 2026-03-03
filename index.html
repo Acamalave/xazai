@@ -404,6 +404,7 @@
                                 <button class="pos-method-btn" data-method="yappy"><i class="fas fa-mobile-alt"></i> Yappy</button>
                                 <button class="pos-method-btn" data-method="tarjeta"><i class="fas fa-credit-card"></i> Tarjeta</button>
                                 <button class="pos-method-btn" data-method="ach"><i class="fas fa-university"></i> ACH</button>
+                                <button class="pos-method-btn" data-method="pedidosya"><i class="fas fa-motorcycle"></i> PedidosYa</button>
                             </div>
                             <div class="pos-cash-change" id="pos-cash-change">
                                 <div class="pos-cash-row">
@@ -435,6 +436,12 @@
                                 <div class="pos-cash-row">
                                     <label><i class="fas fa-mobile-alt"></i> Referencia Yappy:</label>
                                     <input type="text" id="pos-yappy-ref" placeholder="Ref. de transacción Yappy" maxlength="40" class="pos-ref-input">
+                                </div>
+                            </div>
+                            <div class="pos-payment-details hidden" id="pos-payment-details-pedidosya">
+                                <div class="pos-cash-row">
+                                    <label><i class="fas fa-motorcycle"></i> No. Orden PedidosYa:</label>
+                                    <input type="text" id="pos-pedidosya-ref" placeholder="Número de orden PedidosYa" maxlength="40" class="pos-ref-input">
                                 </div>
                             </div>
                         </div>
@@ -1422,6 +1429,7 @@
                     <button class="mesa-method-btn" data-method="yappy"><i class="fas fa-mobile-alt"></i> Yappy</button>
                     <button class="mesa-method-btn" data-method="tarjeta"><i class="fas fa-credit-card"></i> Tarjeta</button>
                     <button class="mesa-method-btn" data-method="ach"><i class="fas fa-university"></i> ACH</button>
+                    <button class="mesa-method-btn" data-method="pedidosya"><i class="fas fa-motorcycle"></i> PedidosYa</button>
                 </div>
                 <!-- Efectivo: recibido y cambio -->
                 <div class="mesa-cash-change" id="mesa-cash-change">
@@ -1443,6 +1451,9 @@
                 </div>
                 <div class="mesa-payment-details hidden" id="mesa-payment-details-yappy">
                     <div class="mesa-cash-row"><label><i class="fas fa-mobile-alt"></i> Ref Yappy:</label><input type="text" id="mesa-yappy-ref" placeholder="Ref. de transacción Yappy" maxlength="40" class="mesa-ref-input"></div>
+                </div>
+                <div class="mesa-payment-details hidden" id="mesa-payment-details-pedidosya">
+                    <div class="mesa-cash-row"><label><i class="fas fa-motorcycle"></i> No. Orden PedidosYa:</label><input type="text" id="mesa-pedidosya-ref" placeholder="Número de orden PedidosYa" maxlength="40" class="mesa-ref-input"></div>
                 </div>
             </div>
 
