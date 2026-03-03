@@ -1313,14 +1313,22 @@ document.addEventListener('DOMContentLoaded', function() {
             // Check if product uses leche in ingredients
             const usesLecheAlm = (product.ingredients || []).some(i => i.toLowerCase().includes('leche de almendras') || i.toLowerCase().includes('agua de coco'));
             const usesLeche = (product.ingredients || []).some(i => i.toLowerCase().includes('leche') && !i.toLowerCase().includes('almendras'));
-            const showProtein = !product.noProtein; // Ocultar si el producto ya incluye proteína
+            const hasProteinIncluded = !!product.noProtein; // Producto ya incluye proteína
+            const showProtein = !product.noProtein; // Mostrar opción de agregar proteína
 
             const hasMilk = usesLeche || usesLecheAlm;
-            if (showProtein || hasMilk) {
+            if (showProtein || hasProteinIncluded || hasMilk) {
                 smoothieOptionsSection = `
                 <div class="expand-section">
                     <h4><i class="fas fa-blender"></i> Personaliza tu Smoothie</h4>
-                    ${showProtein ? `
+                    ${hasProteinIncluded ? `
+                    <div style="margin-bottom:10px">
+                        <span style="font-size:13px;color:var(--text-light);display:block;margin-bottom:6px">Proteína (incluida en receta)</span>
+                        <div class="expand-options-row" id="smoothie-protein-opts">
+                            <label class="option-pill active" data-protein="none"><input type="radio" name="sm-protein" value="none" checked>Con proteína <span class="option-pill-price">Incluida</span></label>
+                            <label class="option-pill" data-protein="sin"><input type="radio" name="sm-protein" value="sin">Sin proteína</label>
+                        </div>
+                    </div>` : showProtein ? `
                     <div style="margin-bottom:10px">
                         <span style="font-size:13px;color:var(--text-light);display:block;margin-bottom:6px">Agregar Proteína (+$2.50)</span>
                         <div class="expand-options-row" id="smoothie-protein-opts">
@@ -1477,6 +1485,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Build extras description
             let extras = [];
             if (proteinChoice === 'sascha') extras.push('Proteína Sascha');
+            if (proteinChoice === 'sin') extras.push('Sin proteína');
             if (milkChoice) extras.push(milkChoice === 'almendras' ? 'Leche de Almendras' : 'Leche Entera');
 
             cart.push({
