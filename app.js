@@ -1361,7 +1361,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="expand-section">
                     <h4><i class="fas fa-plus-circle"></i> Toppings adicionales</h4>
                     <div class="toppings-grid-compact">
-                        ${EXTRA_TOPPINGS.map(t => `
+                        ${getExtraToppings().map(t => `
                             <label class="topping-item-compact">
                                 <input type="checkbox" value="${t.id}">
                                 <span class="topping-emoji">${t.emoji}</span>
@@ -1460,7 +1460,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         function updateTotal() {
             const extras = selectedToppings.reduce((s, tid) => {
-                const t = EXTRA_TOPPINGS.find(tp => tp.id === tid);
+                const t = getExtraToppings().find(tp => tp.id === tid);
                 return s + (t ? t.price : 0);
             }, 0);
             const total = (currentPrice + extras + proteinPrice) * qty;
@@ -1539,11 +1539,11 @@ document.addEventListener('DOMContentLoaded', function() {
         expandEl.querySelector('.btn-add-expand').addEventListener('click', (e) => {
             e.stopPropagation();
             const toppingNames = selectedToppings.map(tid => {
-                const t = EXTRA_TOPPINGS.find(tp => tp.id === tid);
+                const t = getExtraToppings().find(tp => tp.id === tid);
                 return t ? t.name : '';
             }).filter(Boolean);
             const toppingsPrice = selectedToppings.reduce((s, tid) => {
-                const t = EXTRA_TOPPINGS.find(tp => tp.id === tid);
+                const t = getExtraToppings().find(tp => tp.id === tid);
                 return s + (t ? t.price : 0);
             }, 0);
             const note = noteInput ? noteInput.value.trim() : '';
@@ -3674,7 +3674,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
         catsContainer.innerHTML = `<button class="pos-cat-btn active" data-cat="all">Todos</button>` +
             cats.map(catKey => `<button class="pos-cat-btn" data-cat="${catKey}"><i class="fas ${CATEGORIES[catKey].icon}"></i> ${CATEGORIES[catKey].name}</button>`).join('') +
-            `<button class="pos-cat-btn" data-cat="extras"><i class="fas fa-plus-circle"></i> Extras</button>` +
             `<button class="pos-cat-btn" data-cat="arma-tu-bowl"><i class="fas fa-wand-magic-sparkles"></i> Arma tu Bowl</button>`;
 
         catsContainer.addEventListener('click', (e) => {
@@ -4009,12 +4008,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const allItems = getMenuItems();
 
-        // Build list of menu items
+        // Build list of menu items (exclude extras since they render separately)
         let menuItems = [];
         if (category === 'extras') {
             menuItems = [];
         } else if (category === 'all') {
-            menuItems = allItems;
+            menuItems = allItems.filter(i => i.category !== 'extras');
         } else {
             menuItems = allItems.filter(i => i.category === category);
         }
@@ -4022,7 +4021,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Build list of extra toppings
         let extraItems = [];
         if (category === 'extras' || category === 'all') {
-            extraItems = EXTRA_TOPPINGS;
+            extraItems = getExtraToppings();
         }
 
         // Render menu items
@@ -4087,7 +4086,7 @@ document.addEventListener('DOMContentLoaded', function() {
         container.querySelectorAll('.pos-extra-card').forEach(card => {
             card.addEventListener('click', () => {
                 const extraId = card.dataset.extraId;
-                const extra = EXTRA_TOPPINGS.find(t => t.id === extraId);
+                const extra = getExtraToppings().find(t => t.id === extraId);
                 if (extra) addToPOSCart(extraId, '', extra.price);
             });
         });
@@ -4118,7 +4117,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Support both menu items (numeric id) and extras (string id like 't1')
         let product;
         if (typeof productId === 'string' && productId.startsWith('t')) {
-            product = EXTRA_TOPPINGS.find(t => t.id === productId);
+            product = getExtraToppings().find(t => t.id === productId);
         } else {
             product = getMenuItems().find(i => i.id === productId);
         }
@@ -7243,7 +7242,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
         catContainer.innerHTML = `<button class="pos-cat-btn ${catFilter === 'all' ? 'active' : ''}" data-mesa-cat="all">Todos</button>` +
             cats.map(k => `<button class="pos-cat-btn ${catFilter === k ? 'active' : ''}" data-mesa-cat="${k}"><i class="fas ${CATEGORIES[k].icon}"></i> ${CATEGORIES[k].name}</button>`).join('') +
-            `<button class="pos-cat-btn ${catFilter === 'extras' ? 'active' : ''}" data-mesa-cat="extras"><i class="fas fa-plus-circle"></i> Extras</button>` +
             `<button class="pos-cat-btn ${catFilter === 'arma-tu-bowl' ? 'active' : ''}" data-mesa-cat="arma-tu-bowl"><i class="fas fa-wand-magic-sparkles"></i> Arma tu Bowl</button>`;
 
         catContainer.querySelectorAll('.pos-cat-btn').forEach(btn => {
@@ -7260,7 +7258,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const allMenuItems = getMenuItems().filter(i => isProductAvailable(i.id));
+        const allMenuItems = getMenuItems().filter(i => isProductAvailable(i.id) && i.category !== 'extras');
         const items = catFilter === 'extras' ? [] : (catFilter === 'all' ? allMenuItems : allMenuItems.filter(i => i.category === catFilter));
         let html = items.map(item => {
             const hasSizes = item.priceGrande != null && !item.onlyGrande;
@@ -7280,11 +7278,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Add extras/toppings
         const showExtras = catFilter === 'extras' || catFilter === 'all';
-        if (showExtras && typeof EXTRA_TOPPINGS !== 'undefined') {
-            if (items.length > 0) {
+        if (showExtras) {
+            const extrasForMesa = getExtraToppings();
+            if (items.length > 0 && extrasForMesa.length > 0) {
                 html += `<div class="pos-extras-divider">Extras / Toppings</div>`;
             }
-            html += EXTRA_TOPPINGS.map(item => `
+            html += extrasForMesa.map(item => `
                 <div class="pos-product-card pos-extra-card" data-mesa-extra-id="${item.id}">
                     <span class="pos-product-emoji">${item.emoji}</span>
                     <span class="pos-product-name">${item.name}</span>
@@ -7317,7 +7316,7 @@ document.addEventListener('DOMContentLoaded', function() {
             card.addEventListener('click', () => {
                 if (!currentMesa || currentMesa.status === 'libre') { showToast('Abre la mesa primero', 'warning'); return; }
                 const extraId = card.dataset.mesaExtraId;
-                const extra = EXTRA_TOPPINGS.find(t => t.id === extraId);
+                const extra = getExtraToppings().find(t => t.id === extraId);
                 if (extra) {
                     addItemToCurrentDiner({ id: extraId, name: extra.name, emoji: extra.emoji, price: extra.price }, null, extra.price);
                 }
@@ -7960,6 +7959,15 @@ document.addEventListener('DOMContentLoaded', function() {
         return MENU_ITEMS;
     }
 
+    function getExtraToppings() {
+        // Returns extras from Firestore if available, otherwise hardcoded EXTRA_TOPPINGS
+        if (menuItemsLoaded && menuFirestoreItems.length > 0) {
+            const extras = menuFirestoreItems.filter(i => i.category === 'extras');
+            if (extras.length > 0) return extras;
+        }
+        return EXTRA_TOPPINGS;
+    }
+
     function initMenuAdmin() {
         if (menuUnsubscribe) {
             renderMenuAdmin();
@@ -7985,6 +7993,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
             menuItemsLoaded = true;
+            // Seed extras if none exist in Firestore yet
+            const hasExtras = menuFirestoreItems.some(i => i.category === 'extras');
+            if (!hasExtras && menuFirestoreItems.length > 0) {
+                seedExtrasToFirestore();
+            }
             // Re-render admin menu if in admin mode
             if (adminMode) renderMenuAdmin();
             // Re-render customer menu if not in admin mode
@@ -8030,12 +8043,60 @@ document.addEventListener('DOMContentLoaded', function() {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
         });
+        // Also migrate extras/toppings
+        EXTRA_TOPPINGS.forEach(item => {
+            const docRef = db.collection('menu_items').doc();
+            batch.set(docRef, {
+                id: item.id,
+                name: item.name,
+                category: 'extras',
+                tagline: '',
+                description: '',
+                ingredients: [],
+                toppings: [],
+                price: item.price,
+                priceGrande: null,
+                image: '',
+                emoji: item.emoji || '',
+                badge: '',
+                onlyGrande: false,
+                active: true,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
         batch.commit().then(() => {
             showToast('Menú migrado a la base de datos', 'success');
         }).catch(err => {
             console.error('Migration error:', err);
             showToast('Error migrando menú', 'warning');
         });
+    }
+
+    function seedExtrasToFirestore() {
+        const batch = db.batch();
+        EXTRA_TOPPINGS.forEach(item => {
+            const docRef = db.collection('menu_items').doc();
+            batch.set(docRef, {
+                id: item.id,
+                name: item.name,
+                category: 'extras',
+                tagline: '',
+                description: '',
+                ingredients: [],
+                toppings: [],
+                price: item.price,
+                priceGrande: null,
+                image: '',
+                emoji: item.emoji || '',
+                badge: '',
+                onlyGrande: false,
+                active: true,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+        batch.commit().then(() => {
+            console.log('Extras seeded to Firestore');
+        }).catch(err => console.error('Error seeding extras:', err));
     }
 
     function initMenuFilterArrows(filtersContainer) {
@@ -8247,7 +8308,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             // Create new - generate next ID
             data.active = true;
-            const maxId = menuFirestoreItems.reduce((max, i) => Math.max(max, i.id || 0), 0);
+            const maxId = menuFirestoreItems.reduce((max, i) => typeof i.id === 'number' ? Math.max(max, i.id) : max, 0);
             data.id = maxId + 1;
             data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             db.collection('menu_items').add(data).then(() => {

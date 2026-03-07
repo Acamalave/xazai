@@ -43,6 +43,11 @@ const CATEGORIES = {
         subtitle: 'Refrescos y agua',
         icon: 'fa-bottle-water'
     },
+    extras: {
+        name: 'Extras',
+        subtitle: 'Toppings y extras adicionales',
+        icon: 'fa-plus-circle'
+    },
     'arma-tu-bowl': {
         name: 'Arma tu Bowl',
         subtitle: 'Personaliza tu bowl perfecto paso a paso',
