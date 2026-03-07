@@ -66,7 +66,7 @@ const MENU_ITEMS = [
         ingredients: ['Pulpa de Açaí', 'Banana Congelada', 'Piña Congelada'],
         toppings: ['Granola Artesanal', 'Banana Fresca', 'Fresa Laminada', 'Arándanos', 'Coco Rallado'],
         price: 6.50,
-        priceGrande: 10.95,
+        priceGrande: 11.05,
         image: 'images/xazai-bowl.jpg',
         emoji: '💜',
         badge: 'Clásico',
