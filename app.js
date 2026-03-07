@@ -484,7 +484,7 @@ document.addEventListener('DOMContentLoaded', function() {
             userName.textContent = currentUser.name || 'Mi Cuenta';
             loginTriggerBtn.classList.add('hidden');
             logoutBtn.classList.remove('hidden');
-            if (currentUser.role === 'admin') adminPanelBtn.classList.remove('hidden');
+            if (currentUser.role === 'admin' || (currentUser.role === 'collaborator' && currentUser.permissions && currentUser.permissions.length > 0)) adminPanelBtn.classList.remove('hidden');
             // Show customer features if has phone
             if (currentUser.phone && currentUser.role !== 'admin') {
                 showMisPedidosTab();
@@ -568,32 +568,99 @@ document.addEventListener('DOMContentLoaded', function() {
         const fullPhone = code + phone;
         const displayName = name || ('Cliente ' + phone.slice(-4));
 
-        // Check if admin (hardcoded for now)
+        // Check if admin (hardcoded)
         const isAdmin = USERS.find(u => u.role === 'admin' && u.phone === fullPhone);
 
-        currentUser = {
-            username: fullPhone,
-            role: isAdmin ? 'admin' : 'customer',
-            name: displayName,
-            phone: fullPhone
-        };
+        if (isAdmin) {
+            // Admin login — full access
+            currentUser = { username: fullPhone, role: 'admin', name: isAdmin.name || 'Administrador', phone: fullPhone };
+            finishLogin(currentUser, displayName);
+        } else {
+            // Check if this phone belongs to a registered collaborator
+            checkCollaboratorLogin(fullPhone, displayName);
+        }
+    });
 
-        userName.textContent = displayName;
+    // --- Collaborator login check ---
+    function checkCollaboratorLogin(fullPhone, displayName) {
+        if (typeof db === 'undefined') { finishLoginAsCustomer(fullPhone, displayName); return; }
+        // Search collaborators by phone (try with and without country code)
+        const phonesToCheck = [fullPhone];
+        // Also try the local part (without country code 507)
+        if (fullPhone.startsWith('507') && fullPhone.length > 8) phonesToCheck.push(fullPhone.substring(3));
+        // Also try with 507 prefix if not already there
+        if (!fullPhone.startsWith('507')) phonesToCheck.push('507' + fullPhone);
+
+        db.collection('rrhh_collaborators').where('active', '==', true).get().then(snap => {
+            let matchedCollab = null;
+            snap.forEach(doc => {
+                const data = { id: doc.id, ...doc.data() };
+                const collabPhone = (data.phone || '').replace(/\D/g, '');
+                if (phonesToCheck.some(p => p === collabPhone || collabPhone === p || collabPhone.endsWith(p) || p.endsWith(collabPhone))) {
+                    matchedCollab = data;
+                }
+            });
+            if (matchedCollab) {
+                // Found collaborator — get their role permissions
+                const roleId = matchedCollab.roleId;
+                if (roleId) {
+                    db.collection('rrhh_roles').doc(roleId).get().then(roleDoc => {
+                        let permissions = [];
+                        if (roleDoc.exists) {
+                            permissions = migrateOldPermissions(roleDoc.data().permissions || []);
+                        }
+                        currentUser = {
+                            username: fullPhone,
+                            role: 'collaborator',
+                            name: matchedCollab.name || displayName,
+                            phone: fullPhone,
+                            collaboratorId: matchedCollab.id,
+                            roleId: roleId,
+                            roleName: matchedCollab.roleName || '',
+                            permissions: permissions
+                        };
+                        finishLogin(currentUser, matchedCollab.name || displayName);
+                    }).catch(() => {
+                        // Role not found, login as collaborator with no permissions
+                        currentUser = { username: fullPhone, role: 'collaborator', name: matchedCollab.name || displayName, phone: fullPhone, collaboratorId: matchedCollab.id, permissions: [] };
+                        finishLogin(currentUser, matchedCollab.name || displayName);
+                    });
+                } else {
+                    finishLoginAsCustomer(fullPhone, displayName);
+                }
+            } else {
+                finishLoginAsCustomer(fullPhone, displayName);
+            }
+        }).catch(() => {
+            finishLoginAsCustomer(fullPhone, displayName);
+        });
+    }
+
+    function finishLoginAsCustomer(fullPhone, displayName) {
+        currentUser = { username: fullPhone, role: 'customer', name: displayName, phone: fullPhone };
+        finishLogin(currentUser, displayName);
+    }
+
+    function finishLogin(user, displayName) {
+        currentUser = user;
+        userName.textContent = user.name || displayName;
         loginTriggerBtn.classList.add('hidden');
         logoutBtn.classList.remove('hidden');
-        if (currentUser.role === 'admin') adminPanelBtn.classList.remove('hidden');
 
-        // Persist user session
+        // Show admin button for admin and collaborators with permissions
+        if (user.role === 'admin' || (user.role === 'collaborator' && user.permissions && user.permissions.length > 0)) {
+            adminPanelBtn.classList.remove('hidden');
+        }
+
         localStorage.setItem('xazai_user', JSON.stringify(currentUser));
-
         closeLoginModal();
-        showToast(`Bienvenido, ${displayName}!`, 'success');
+        showToast(`Bienvenido, ${user.name || displayName}!`, 'success');
 
-        // Load customer features if has phone
-        if (currentUser.role !== 'admin' && currentUser.phone) {
+        // Load customer features for non-admin with phone
+        if (user.role !== 'admin' && user.role !== 'collaborator' && user.phone) {
             showMisPedidosTab();
-            startCustomerOrdersListener(currentUser.phone);
-            loadCustomerOrderHistory(currentUser.phone).then(() => {
+            startCustomerOrdersListener(user.phone);
+            loadCustomerOrderHistory(user.phone).then(() => {
                 const activeTab = document.querySelector('.tab.active');
                 if (activeTab && activeTab.dataset.category === 'inicio') {
                     renderAllProducts();
@@ -601,9 +668,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        // If came from checkout, show order type selection
         if (cart.length > 0) showOrderTypeModal();
-    });
+    }
 
     btnGuest.addEventListener('click', () => {
         currentUser = { username: 'guest', role: 'guest', name: 'Invitado' };
@@ -2842,19 +2908,66 @@ document.addEventListener('DOMContentLoaded', function() {
     let attScanType = 'entrada';
     let attClockInterval = null;
     let attScanClockInterval = null;
+    // Face-API.js state
+    let faceApiLoaded = false;
+    let faceApiLoading = false;
+    async function loadFaceApiModels() {
+        if (faceApiLoaded || faceApiLoading) return faceApiLoaded;
+        if (typeof faceapi === 'undefined') { console.warn('face-api.js not loaded'); return false; }
+        faceApiLoading = true;
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+        try {
+            await Promise.all([
+                faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+            ]);
+            faceApiLoaded = true;
+            console.log('Face-API models loaded successfully');
+        } catch(err) {
+            console.error('Error loading face-api models:', err);
+            faceApiLoaded = false;
+        }
+        faceApiLoading = false;
+        return faceApiLoaded;
+    }
+    // Pre-load models when page loads (non-blocking)
+    setTimeout(() => { loadFaceApiModels(); }, 3000);
     // RRHH constants (hoisting fix)
-    const RRHH_PERMISSIONS = [
-        { key: 'gestionar_usuarios', label: 'Gestionar Usuarios', icon: 'fa-users-cog' },
-        { key: 'gestionar_roles', label: 'Gestionar Roles', icon: 'fa-user-shield' },
-        { key: 'ver_reportes', label: 'Ver Reportes', icon: 'fa-chart-bar' },
-        { key: 'registrar_asistencia', label: 'Registrar Asistencia', icon: 'fa-fingerprint' },
-        { key: 'ver_asistencia', label: 'Ver Asistencia', icon: 'fa-clipboard-list' },
-        { key: 'editar_colaboradores', label: 'Editar Colaboradores', icon: 'fa-user-edit' }
-    ];
+    // Dynamic: reads admin tabs from DOM so new tabs auto-appear in role permissions
+    function getAdminTabs() {
+        const tabs = [];
+        document.querySelectorAll('.admin-nav-btn[data-section]').forEach(btn => {
+            const key = btn.dataset.section;
+            const label = btn.querySelector('span') ? btn.querySelector('span').textContent.trim() : key;
+            const iconEl = btn.querySelector('i.fas, i.fab');
+            const icon = iconEl ? iconEl.className.replace('fas ', '').replace('fab ', '').trim() : 'fa-circle';
+            tabs.push({ key, label, icon });
+        });
+        return tabs;
+    }
+    // Map old abstract permissions to tab keys for migration
+    const OLD_PERM_TO_TAB = {
+        'registrar_asistencia': 'asistencia', 'ver_asistencia': 'asistencia',
+        'gestionar_usuarios': 'usuarios', 'ver_reportes': 'dashboard',
+        'gestionar_roles': 'rrhh', 'editar_colaboradores': 'rrhh'
+    };
+    function migrateOldPermissions(permissions) {
+        if (!permissions || !permissions.length) return permissions;
+        // Check if any old-format permission exists
+        const hasOld = permissions.some(p => OLD_PERM_TO_TAB[p]);
+        if (!hasOld) return permissions;
+        const migrated = new Set();
+        permissions.forEach(p => {
+            if (OLD_PERM_TO_TAB[p]) migrated.add(OLD_PERM_TO_TAB[p]);
+            else migrated.add(p);
+        });
+        return [...migrated];
+    }
     const DEFAULT_ROLES = [
-        { name: 'Administrador', color: '#7b2d8e', permissions: ['gestionar_usuarios','gestionar_roles','ver_reportes','registrar_asistencia','ver_asistencia','editar_colaboradores'], isDefault: true },
-        { name: 'Supervisor', color: '#5bc0de', permissions: ['gestionar_usuarios','ver_reportes','registrar_asistencia','ver_asistencia'], isDefault: true },
-        { name: 'Colaborador', color: '#5cb85c', permissions: ['registrar_asistencia'], isDefault: true }
+        { name: 'Administrador', color: '#7b2d8e', permissions: ['orders','pos','inventory','menu','expenses','dashboard','asistencia','comportamiento','facturacion','mesas','rrhh','usuarios'], isDefault: true },
+        { name: 'Supervisor', color: '#5bc0de', permissions: ['orders','pos','inventory','mesas','asistencia'], isDefault: true },
+        { name: 'Colaborador', color: '#5cb85c', permissions: ['asistencia'], isDefault: true }
     ];
     let posCart = [];
     let posPaymentMethod = 'efectivo';
@@ -2916,11 +3029,41 @@ document.addEventListener('DOMContentLoaded', function() {
         initAttendance();
         // Start menu listener early so Firestore products are available for POS/Mesas
         if (!menuUnsubscribe) startMenuListener();
+        // Apply tab permissions based on user role
+        applyTabPermissions();
+    }
+
+    function applyTabPermissions() {
+        const navBtns = document.querySelectorAll('.admin-nav-btn[data-section]');
+        if (!currentUser || currentUser.role === 'admin') {
+            // Admin sees everything
+            navBtns.forEach(btn => { btn.style.display = ''; });
+            return;
+        }
+        const perms = (currentUser.permissions || []);
+        let firstVisibleBtn = null;
+        let activeIsHidden = false;
+        navBtns.forEach(btn => {
+            const section = btn.dataset.section;
+            if (perms.includes(section)) {
+                btn.style.display = '';
+                if (!firstVisibleBtn) firstVisibleBtn = btn;
+            } else {
+                btn.style.display = 'none';
+                if (btn.classList.contains('active')) activeIsHidden = true;
+            }
+        });
+        // If active tab was hidden, click the first visible tab
+        if (activeIsHidden && firstVisibleBtn) {
+            firstVisibleBtn.click();
+        }
     }
 
     function exitAdminMode() {
         adminMode = false;
         localStorage.removeItem('xazai_admin_email');
+        // Restore all tabs visibility
+        document.querySelectorAll('.admin-nav-btn[data-section]').forEach(btn => { btn.style.display = ''; });
         // Stop listeners
         if (ordersUnsubscribe) { ordersUnsubscribe(); ordersUnsubscribe = null; }
         if (mesasUnsubscribe) { mesasUnsubscribe(); mesasUnsubscribe = null; }
@@ -4843,7 +4986,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     // RRHH - Recursos Humanos
     // ========================================
-    // RRHH_PERMISSIONS, DEFAULT_ROLES & state variables hoisted above (hoisting fix)
+    // getAdminTabs(), DEFAULT_ROLES, face-api & state variables hoisted above
 
     var _rrhhInitialized = false;
     function initRRHH() {
@@ -4916,11 +5059,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderRolePermissions() {
         const container = $('rrhh-role-permissions');
         if (!container) return;
-        container.innerHTML = RRHH_PERMISSIONS.map(p => `
-            <div class="rrhh-perm-item" data-perm="${p.key}">
-                <input type="checkbox" value="${p.key}">
-                <i class="fas ${p.icon}"></i>
-                <span>${p.label}</span>
+        const tabs = getAdminTabs();
+        container.innerHTML = tabs.map(t => `
+            <div class="rrhh-perm-item" data-perm="${t.key}">
+                <input type="checkbox" value="${t.key}">
+                <i class="fas ${t.icon}"></i>
+                <span>${t.label}</span>
             </div>
         `).join('');
         container.querySelectorAll('.rrhh-perm-item').forEach(item => {
@@ -4934,7 +5078,21 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadRRHHRoles() {
         db.collection('rrhh_roles').orderBy('createdAt', 'asc').get().then(snap => {
             rrhhRoles = [];
-            snap.forEach(doc => rrhhRoles.push({ id: doc.id, ...doc.data() }));
+            const allTabKeys = getAdminTabs().map(t => t.key);
+            snap.forEach(doc => {
+                const data = { id: doc.id, ...doc.data() };
+                // Migrate old abstract permissions to tab-based permissions
+                const migrated = migrateOldPermissions(data.permissions);
+                // If this is the "Administrador" default role, ensure it has ALL tabs
+                if (data.isDefault && data.name === 'Administrador') {
+                    data.permissions = allTabKeys;
+                    db.collection('rrhh_roles').doc(doc.id).update({ permissions: allTabKeys }).catch(() => {});
+                } else if (JSON.stringify(migrated) !== JSON.stringify(data.permissions)) {
+                    data.permissions = migrated;
+                    db.collection('rrhh_roles').doc(doc.id).update({ permissions: migrated }).catch(() => {});
+                }
+                rrhhRoles.push(data);
+            });
             renderRoles();
             populateRoleSelects();
         });
@@ -4952,8 +5110,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
                 <div class="rrhh-role-perms">
                     ${(role.permissions || []).map(p => {
-                        const perm = RRHH_PERMISSIONS.find(pp => pp.key === p);
-                        return perm ? `<span class="rrhh-role-perm-tag">${perm.label}</span>` : '';
+                        const tab = getAdminTabs().find(t => t.key === p);
+                        return tab ? `<span class="rrhh-role-perm-tag"><i class="fas ${tab.icon}" style="margin-right:4px"></i>${tab.label}</span>` : '';
                     }).join('')}
                 </div>
                 <div class="rrhh-role-actions">
@@ -5219,44 +5377,82 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 1000);
     }
 
+    // Helper: capture frame from video to resized canvas and return { canvas, base64 }
+    function captureVideoFrame(videoEl) {
+        const rawCanvas = document.createElement('canvas');
+        rawCanvas.width = videoEl.videoWidth;
+        rawCanvas.height = videoEl.videoHeight;
+        rawCanvas.getContext('2d').drawImage(videoEl, 0, 0);
+        const maxSize = 800;
+        let w = rawCanvas.width, h = rawCanvas.height;
+        if (w > maxSize || h > maxSize) {
+            if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+            else { w = Math.round(w * maxSize / h); h = maxSize; }
+        }
+        const resized = document.createElement('canvas');
+        resized.width = w; resized.height = h;
+        resized.getContext('2d').drawImage(rawCanvas, 0, 0, w, h);
+        return { canvas: resized, base64: resized.toDataURL('image/jpeg', 0.7) };
+    }
+
+    // Helper: extract face descriptor from a canvas using face-api.js
+    async function extractFaceDescriptor(canvasEl) {
+        if (!faceApiLoaded) {
+            const loaded = await loadFaceApiModels();
+            if (!loaded) return null;
+        }
+        try {
+            const detection = await faceapi.detectSingleFace(canvasEl).withFaceLandmarks().withFaceDescriptor();
+            if (!detection) return null;
+            return Array.from(detection.descriptor); // Convert Float32Array to regular array for Firestore
+        } catch(err) {
+            console.error('Face descriptor extraction error:', err);
+            return null;
+        }
+    }
+
     function performBiometricScan() {
         const scanLine = $('rrhh-scan-line');
         scanLine.classList.remove('hidden');
         scanLine.style.animation = 'none';
         void scanLine.offsetHeight;
         scanLine.style.animation = '';
-        setTimeout(() => {
+        setTimeout(async () => {
             scanLine.classList.add('hidden');
             const video = $('rrhh-camera-video');
-            const canvas = $('rrhh-camera-canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const maxSize = 800;
-            let w = canvas.width, h = canvas.height;
-            if (w > maxSize || h > maxSize) {
-                if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
-                else { w = Math.round(w * maxSize / h); h = maxSize; }
+            if (!video || video.videoWidth === 0) {
+                $('rrhh-scan-result').classList.remove('hidden');
+                $('rrhh-scan-result-text').textContent = 'No se pudo capturar. Intenta de nuevo.';
+                setTimeout(() => closeBiometricCamera(), 2000);
+                return;
             }
-            const resized = document.createElement('canvas');
-            resized.width = w; resized.height = h;
-            resized.getContext('2d').drawImage(canvas, 0, 0, w, h);
-            const base64 = resized.toDataURL('image/jpeg', 0.7);
+            const { canvas, base64 } = captureVideoFrame(video);
             const result = $('rrhh-scan-result');
             result.classList.remove('hidden');
+
             if (rrhhCameraMode === 'register') {
-                $('rrhh-scan-result-text').textContent = 'Rostro Capturado';
+                // Registration: capture photo + extract face descriptor
+                $('rrhh-scan-result-text').textContent = 'Analizando rostro con IA...';
+                const descriptor = await extractFaceDescriptor(canvas);
+                if (!descriptor) {
+                    $('rrhh-scan-result-text').textContent = 'No se detectó un rostro claro. Intenta de nuevo.';
+                    setTimeout(() => { closeBiometricCamera(); showToast('No se detectó rostro. Asegúrate de estar frente a la cámara.', 'warning'); }, 2000);
+                    return;
+                }
+                $('rrhh-scan-result-text').textContent = 'Rostro Capturado ✓';
                 db.collection('rrhh_collaborators').doc(rrhhCameraTargetId).update({
                     biometricPhoto: base64,
+                    faceDescriptor: descriptor,
                     biometricDate: firebase.firestore.FieldValue.serverTimestamp()
                 }).then(() => {
                     setTimeout(() => {
                         closeBiometricCamera();
-                        showToast('Biometría registrada correctamente', 'success');
+                        showToast('Biometría registrada con reconocimiento facial', 'success');
                         loadRRHHCollaborators();
                     }, 1500);
                 });
             } else {
+                // Verification mode (from RRHH tab) — just verify and record
                 $('rrhh-scan-result-text').textContent = 'Identidad Verificada';
                 setTimeout(() => {
                     closeBiometricCamera();
@@ -5541,46 +5737,65 @@ document.addEventListener('DOMContentLoaded', function() {
         scanLine.style.animation = '';
         scanPulse.classList.remove('hidden');
 
-        setTimeout(() => {
+        setTimeout(async () => {
             scanLine.classList.add('hidden');
             scanPulse.classList.add('hidden');
-            // Capture frame
             const video = $('att-scan-video');
-            const canvas = $('att-scan-canvas');
             if (!video || video.videoWidth === 0) {
                 showAttScanFailure('No se pudo capturar la imagen. Intenta de nuevo.');
                 return;
             }
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const maxSize = 800;
-            let w = canvas.width, h = canvas.height;
-            if (w > maxSize || h > maxSize) {
-                if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
-                else { w = Math.round(w * maxSize / h); h = maxSize; }
+            const { canvas, base64: capturedPhoto } = captureVideoFrame(video);
+
+            // Get collaborators with face descriptors
+            const registeredCollabs = rrhhCollaborators.filter(c => c.biometricPhoto);
+            if (registeredCollabs.length === 0) {
+                showAttScanFailure('No hay colaboradores con biometría registrada');
+                return;
             }
-            const resized = document.createElement('canvas');
-            resized.width = w; resized.height = h;
-            resized.getContext('2d').drawImage(canvas, 0, 0, w, h);
-            const capturedPhoto = resized.toDataURL('image/jpeg', 0.7);
-            simulateFaceMatch(capturedPhoto);
+
+            // Try AI face recognition
+            const collabsWithDescriptors = registeredCollabs.filter(c => c.faceDescriptor && c.faceDescriptor.length === 128);
+            if (faceApiLoaded && collabsWithDescriptors.length > 0) {
+                $('att-scan-status-text').textContent = 'Reconociendo rostro con IA...';
+                const descriptor = await extractFaceDescriptor(canvas);
+                if (descriptor) {
+                    // Compare against all registered descriptors
+                    let bestMatch = null;
+                    let bestDistance = Infinity;
+                    collabsWithDescriptors.forEach(c => {
+                        const stored = new Float32Array(c.faceDescriptor);
+                        const captured = new Float32Array(descriptor);
+                        const distance = faceapi.euclideanDistance(stored, captured);
+                        if (distance < bestDistance) {
+                            bestDistance = distance;
+                            bestMatch = c;
+                        }
+                    });
+                    console.log('Face match - best distance:', bestDistance, 'match:', bestMatch ? bestMatch.name : 'none');
+                    if (bestMatch && bestDistance < 0.6) {
+                        // Match found!
+                        showAttScanSuccess(bestMatch, capturedPhoto, bestDistance);
+                        return;
+                    } else {
+                        // No match — show manual selector as fallback
+                        $('att-scan-status-text').textContent = 'No se reconoció el rostro';
+                        showAttCollabSelector(registeredCollabs, capturedPhoto);
+                        return;
+                    }
+                } else {
+                    // Face not detected in captured frame — fallback to selector
+                    showAttCollabSelector(registeredCollabs, capturedPhoto);
+                    return;
+                }
+            } else {
+                // face-api not loaded or no descriptors — fallback to manual selector
+                showAttCollabSelector(registeredCollabs, capturedPhoto);
+            }
         }, 2500);
     }
 
-    function simulateFaceMatch(capturedPhoto) {
-        $('att-scan-status-text').textContent = 'Comparando con registros biométricos...';
-        const registeredCollabs = rrhhCollaborators.filter(c => c.biometricPhoto);
-        if (registeredCollabs.length === 0) {
-            showAttScanFailure('No hay colaboradores con biometría registrada');
-            return;
-        }
-        // Show collaborator selection instead of random matching
-        setTimeout(() => {
-            showAttCollabSelector(registeredCollabs, capturedPhoto);
-        }, 1500);
-    }
-
+    // Fallback: manual collaborator selector (used when AI can't match)
     function showAttCollabSelector(collabs, capturedPhoto) {
         const statusText = $('att-scan-status-text');
         if (statusText) statusText.textContent = 'Selecciona tu identidad:';
@@ -5612,14 +5827,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    function showAttScanSuccess(collab, capturedPhoto) {
+    function showAttScanSuccess(collab, capturedPhoto, distance) {
         const result = $('att-scan-result');
         const icon = $('att-scan-result-icon');
         const text = $('att-scan-result-text');
         icon.className = 'fas fa-check-circle';
-        text.textContent = `Identificado: ${collab.name}`;
+        const confidence = distance !== undefined ? ` (${Math.round((1 - distance) * 100)}% coincidencia)` : '';
+        text.textContent = `Identificado: ${collab.name}${confidence}`;
         result.classList.remove('hidden');
-        $('att-scan-status-text').textContent = 'Identidad verificada';
+        $('att-scan-status-text').textContent = 'Identidad verificada por IA';
         setTimeout(() => {
             closeAttendanceScan();
             recordAttendance(collab.id, capturedPhoto, attScanType);
