@@ -2881,6 +2881,12 @@ document.addEventListener('DOMContentLoaded', function() {
     let adminMode = false;
     let ordersUnsubscribe = null;
     let mesasUnsubscribe = null;
+    let salesUnsubscribe = null;
+    let expensesUnsubscribe = null;
+    let attendanceUnsubscribe = null;
+    let rolesUnsubscribe = null;
+    let collabsUnsubscribe = null;
+    let customersUnsubscribe = null;
     let mesasData = [];
     let currentMesa = null;
     let currentDinerIdx = 0;
@@ -3067,6 +3073,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Stop listeners
         if (ordersUnsubscribe) { ordersUnsubscribe(); ordersUnsubscribe = null; }
         if (mesasUnsubscribe) { mesasUnsubscribe(); mesasUnsubscribe = null; }
+        if (salesUnsubscribe) { salesUnsubscribe(); salesUnsubscribe = null; }
+        if (expensesUnsubscribe) { expensesUnsubscribe(); expensesUnsubscribe = null; }
+        if (attendanceUnsubscribe) { attendanceUnsubscribe(); attendanceUnsubscribe = null; }
+        if (rolesUnsubscribe) { rolesUnsubscribe(); rolesUnsubscribe = null; }
+        if (collabsUnsubscribe) { collabsUnsubscribe(); collabsUnsubscribe = null; }
+        if (customersUnsubscribe) { customersUnsubscribe(); customersUnsubscribe = null; }
         // Keep menu listener alive — customer view also depends on it
         stopRRHHClock();
         stopAttClock();
@@ -4418,11 +4430,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function loadTodaySales() {
         const today = getDateString();
-        db.collection('sales').where('date', '==', today).get().then(snapshot => {
+        if (salesUnsubscribe) salesUnsubscribe();
+        salesUnsubscribe = db.collection('sales').where('date', '==', today).onSnapshot(snapshot => {
             let count = 0, total = 0;
             snapshot.forEach(doc => {
                 const data = doc.data();
-                if (data.voided) return; // Exclude voided sales
+                if (data.voided) return;
                 count++;
                 total += data.total || 0;
             });
@@ -4645,7 +4658,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadExpenses() {
-        db.collection('expenses').orderBy('date', 'desc').limit(200).get().then(snapshot => {
+        if (expensesUnsubscribe) expensesUnsubscribe();
+        expensesUnsubscribe = db.collection('expenses').orderBy('date', 'desc').limit(200).onSnapshot(snapshot => {
             const expenses = [];
             snapshot.forEach(doc => expenses.push({ id: doc.id, ...doc.data() }));
             renderExpenseCards(expenses);
@@ -5076,17 +5090,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function loadRRHHRoles() {
-        db.collection('rrhh_roles').orderBy('createdAt', 'asc').get().then(snap => {
+        if (rolesUnsubscribe) rolesUnsubscribe();
+        rolesUnsubscribe = db.collection('rrhh_roles').orderBy('createdAt', 'asc').onSnapshot(snap => {
             rrhhRoles = [];
             const allTabKeys = getAdminTabs().map(t => t.key);
             snap.forEach(doc => {
                 const data = { id: doc.id, ...doc.data() };
                 // Migrate old abstract permissions to tab-based permissions
                 const migrated = migrateOldPermissions(data.permissions);
-                // If this is the "Administrador" default role, ensure it has ALL tabs
+                // If this is the "Administrador" default role, ensure it has ALL tabs (only update if different)
                 if (data.isDefault && data.name === 'Administrador') {
-                    data.permissions = allTabKeys;
-                    db.collection('rrhh_roles').doc(doc.id).update({ permissions: allTabKeys }).catch(() => {});
+                    if (JSON.stringify(data.permissions) !== JSON.stringify(allTabKeys)) {
+                        data.permissions = allTabKeys;
+                        db.collection('rrhh_roles').doc(doc.id).update({ permissions: allTabKeys }).catch(() => {});
+                    }
                 } else if (JSON.stringify(migrated) !== JSON.stringify(data.permissions)) {
                     data.permissions = migrated;
                     db.collection('rrhh_roles').doc(doc.id).update({ permissions: migrated }).catch(() => {});
@@ -5196,13 +5213,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // --- Collaborators ---
     function loadRRHHCollaborators() {
-        db.collection('rrhh_collaborators').where('active', '==', true).orderBy('createdAt', 'desc').get().then(snap => {
+        if (collabsUnsubscribe) collabsUnsubscribe();
+        collabsUnsubscribe = db.collection('rrhh_collaborators').where('active', '==', true).orderBy('createdAt', 'desc').onSnapshot(snap => {
             rrhhCollaborators = [];
             snap.forEach(doc => rrhhCollaborators.push({ id: doc.id, ...doc.data() }));
             renderCollaborators();
-        }).catch(() => {
-            // Index might not exist yet, try without ordering
-            db.collection('rrhh_collaborators').get().then(snap => {
+        }, () => {
+            // Index might not exist yet, fallback without ordering
+            if (collabsUnsubscribe) collabsUnsubscribe();
+            collabsUnsubscribe = db.collection('rrhh_collaborators').onSnapshot(snap => {
                 rrhhCollaborators = [];
                 snap.forEach(doc => { const d = doc.data(); if (d.active !== false) rrhhCollaborators.push({ id: doc.id, ...d }); });
                 renderCollaborators();
@@ -5537,13 +5556,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const now = new Date();
         const pad = n => String(n).padStart(2, '0');
         const today = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
-        db.collection('rrhh_attendance').where('localDate', '==', today).orderBy('timestamp', 'desc').get().then(snap => {
+        if (attendanceUnsubscribe) attendanceUnsubscribe();
+        attendanceUnsubscribe = db.collection('rrhh_attendance').where('localDate', '==', today).orderBy('timestamp', 'desc').onSnapshot(snap => {
             const records = [];
             snap.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
             renderTodayLog(records);
-        }).catch(() => {
-            // Index might not exist yet
-            db.collection('rrhh_attendance').where('localDate', '==', today).get().then(snap => {
+        }, () => {
+            // Index might not exist yet, fallback without ordering
+            if (attendanceUnsubscribe) attendanceUnsubscribe();
+            attendanceUnsubscribe = db.collection('rrhh_attendance').where('localDate', '==', today).onSnapshot(snap => {
                 const records = [];
                 snap.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
                 renderTodayLog(records);
@@ -6673,20 +6694,20 @@ document.addEventListener('DOMContentLoaded', function() {
     let customersCache = [];
     let currentCustomerSort = 'recent';
 
-    async function loadCustomers() {
+    function loadCustomers() {
         if (typeof db === 'undefined') return;
         const container = $('usr-list-container');
         if (container) container.innerHTML = '<div class="usr-loading"><i class="fas fa-spinner fa-spin"></i> Cargando clientes...</div>';
-        try {
-            const snap = await db.collection('customers').orderBy('lastOrderDate', 'desc').get();
+        if (customersUnsubscribe) customersUnsubscribe();
+        customersUnsubscribe = db.collection('customers').orderBy('lastOrderDate', 'desc').onSnapshot(snap => {
             customersCache = [];
             snap.forEach(doc => customersCache.push({ id: doc.id, ...doc.data() }));
             renderCustomerList();
             updateCustomerStats();
-        } catch (e) {
+        }, (e) => {
             console.error('loadCustomers error:', e);
             if (container) container.innerHTML = '<div class="usr-empty"><i class="fas fa-exclamation-triangle"></i><p>Error cargando clientes</p></div>';
-        }
+        });
     }
 
     function updateCustomerStats() {
