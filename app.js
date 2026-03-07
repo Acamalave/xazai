@@ -1586,10 +1586,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ========================================
     function renderBuildBowl() {
         buildBowl = { base: null, protein: null, toppings: [], dressing: null };
-        renderBuildOptions('base-options', BUILD_OPTIONS.bases, 'base');
-        renderBuildOptions('protein-options', BUILD_OPTIONS.proteins, 'protein');
-        renderBuildOptions('topping-options', BUILD_OPTIONS.toppings, 'topping');
-        renderBuildOptions('dressing-options', BUILD_OPTIONS.dressings, 'dressing');
+        renderBuildOptions('base-options', getBuildOptions().bases, 'base');
+        renderBuildOptions('protein-options', getBuildOptions().proteins, 'protein');
+        renderBuildOptions('topping-options', getBuildOptions().toppings, 'topping');
+        renderBuildOptions('dressing-options', getBuildOptions().dressings, 'dressing');
         updateBuildSummary();
     }
 
@@ -3902,19 +3902,19 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="mesa-bowl-builder">
                 <div class="mesa-bowl-step">
                     <h4><span class="mesa-bowl-step-num">1</span> Base</h4>
-                    <div class="mesa-bowl-options" data-step="base">${BUILD_OPTIONS.bases.map(o => optBtn(o, 'base')).join('')}</div>
+                    <div class="mesa-bowl-options" data-step="base">${getBuildOptions().bases.map(o => optBtn(o, 'base')).join('')}</div>
                 </div>
                 <div class="mesa-bowl-step">
                     <h4><span class="mesa-bowl-step-num">2</span> Textura</h4>
-                    <div class="mesa-bowl-options" data-step="protein">${BUILD_OPTIONS.proteins.map(o => optBtn(o, 'protein')).join('')}</div>
+                    <div class="mesa-bowl-options" data-step="protein">${getBuildOptions().proteins.map(o => optBtn(o, 'protein')).join('')}</div>
                 </div>
                 <div class="mesa-bowl-step">
                     <h4><span class="mesa-bowl-step-num">3</span> Toppings <small>(máx 4)</small></h4>
-                    <div class="mesa-bowl-options" data-step="topping">${BUILD_OPTIONS.toppings.map(o => optBtn(o, 'topping')).join('')}</div>
+                    <div class="mesa-bowl-options" data-step="topping">${getBuildOptions().toppings.map(o => optBtn(o, 'topping')).join('')}</div>
                 </div>
                 <div class="mesa-bowl-step">
                     <h4><span class="mesa-bowl-step-num">4</span> Drizzle</h4>
-                    <div class="mesa-bowl-options" data-step="dressing">${BUILD_OPTIONS.dressings.map(o => optBtn(o, 'dressing')).join('')}</div>
+                    <div class="mesa-bowl-options" data-step="dressing">${getBuildOptions().dressings.map(o => optBtn(o, 'dressing')).join('')}</div>
                 </div>
                 <div class="mesa-bowl-summary">
                     <div class="mesa-bowl-summary-lines" id="pos-bowl-summary-lines"><p style="color:var(--text-light);font-size:12px">Selecciona los ingredientes</p></div>
@@ -4013,7 +4013,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (category === 'extras') {
             menuItems = [];
         } else if (category === 'all') {
-            menuItems = allItems.filter(i => i.category !== 'extras');
+            menuItems = allItems.filter(i => i.category !== 'extras' && (!i.category || !i.category.startsWith('build-')));
         } else {
             menuItems = allItems.filter(i => i.category === category);
         }
@@ -7258,7 +7258,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        const allMenuItems = getMenuItems().filter(i => isProductAvailable(i.id) && i.category !== 'extras');
+        const allMenuItems = getMenuItems().filter(i => isProductAvailable(i.id) && i.category !== 'extras' && (!i.category || !i.category.startsWith('build-')));
         const items = catFilter === 'extras' ? [] : (catFilter === 'all' ? allMenuItems : allMenuItems.filter(i => i.category === catFilter));
         let html = items.map(item => {
             const hasSizes = item.priceGrande != null && !item.onlyGrande;
@@ -7357,19 +7357,19 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="mesa-bowl-builder">
                 <div class="mesa-bowl-step">
                     <h4><span class="mesa-bowl-step-num">1</span> Base</h4>
-                    <div class="mesa-bowl-options" data-step="base">${BUILD_OPTIONS.bases.map(o => optBtn(o, 'base')).join('')}</div>
+                    <div class="mesa-bowl-options" data-step="base">${getBuildOptions().bases.map(o => optBtn(o, 'base')).join('')}</div>
                 </div>
                 <div class="mesa-bowl-step">
                     <h4><span class="mesa-bowl-step-num">2</span> Textura</h4>
-                    <div class="mesa-bowl-options" data-step="protein">${BUILD_OPTIONS.proteins.map(o => optBtn(o, 'protein')).join('')}</div>
+                    <div class="mesa-bowl-options" data-step="protein">${getBuildOptions().proteins.map(o => optBtn(o, 'protein')).join('')}</div>
                 </div>
                 <div class="mesa-bowl-step">
                     <h4><span class="mesa-bowl-step-num">3</span> Toppings <small>(máx 4)</small></h4>
-                    <div class="mesa-bowl-options" data-step="topping">${BUILD_OPTIONS.toppings.map(o => optBtn(o, 'topping')).join('')}</div>
+                    <div class="mesa-bowl-options" data-step="topping">${getBuildOptions().toppings.map(o => optBtn(o, 'topping')).join('')}</div>
                 </div>
                 <div class="mesa-bowl-step">
                     <h4><span class="mesa-bowl-step-num">4</span> Drizzle</h4>
-                    <div class="mesa-bowl-options" data-step="dressing">${BUILD_OPTIONS.dressings.map(o => optBtn(o, 'dressing')).join('')}</div>
+                    <div class="mesa-bowl-options" data-step="dressing">${getBuildOptions().dressings.map(o => optBtn(o, 'dressing')).join('')}</div>
                 </div>
                 <div class="mesa-bowl-summary">
                     <div class="mesa-bowl-summary-lines" id="mesa-bowl-summary-lines"><p style="color:var(--text-light);font-size:12px">Selecciona los ingredientes</p></div>
@@ -7968,6 +7968,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return EXTRA_TOPPINGS;
     }
 
+    function getBuildOptions() {
+        // Returns build options from Firestore if available, otherwise hardcoded BUILD_OPTIONS
+        if (menuItemsLoaded && menuFirestoreItems.length > 0) {
+            const bases = menuFirestoreItems.filter(i => i.category === 'build-base');
+            const proteins = menuFirestoreItems.filter(i => i.category === 'build-protein');
+            const toppings = menuFirestoreItems.filter(i => i.category === 'build-topping');
+            const dressings = menuFirestoreItems.filter(i => i.category === 'build-drizzle');
+            if (bases.length > 0) return { bases, proteins, toppings, dressings };
+        }
+        return BUILD_OPTIONS;
+    }
+
     function initMenuAdmin() {
         if (menuUnsubscribe) {
             renderMenuAdmin();
@@ -7998,12 +8010,20 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!hasExtras && menuFirestoreItems.length > 0) {
                 seedExtrasToFirestore();
             }
+            // Seed build options if none exist in Firestore yet
+            const hasBuildOpts = menuFirestoreItems.some(i => i.category && i.category.startsWith('build-'));
+            if (!hasBuildOpts && menuFirestoreItems.length > 0) {
+                seedBuildOptionsToFirestore();
+            }
             // Re-render all views that show menu/prices
             if (adminMode) {
                 // Detect which admin section is active and re-render accordingly
                 const activeAdminBtn = document.querySelector('.admin-nav-btn.active');
                 const activeSection = activeAdminBtn ? activeAdminBtn.dataset.section : '';
-                if (activeSection === 'menu') renderMenuAdmin();
+                if (activeSection === 'menu') {
+                    const activeMenuFilter = document.querySelector('.menu-filter-btn.active');
+                    renderMenuAdmin(activeMenuFilter ? activeMenuFilter.dataset.menuCat : 'all');
+                }
                 if (activeSection === 'pos') {
                     const activePosCat = document.querySelector('#pos-categories .pos-cat-btn.active');
                     if (activePosCat) renderPOSProducts(activePosCat.dataset.cat);
@@ -8076,6 +8096,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
         });
+        // Also migrate build options (Arma tu Bowl)
+        const buildCategories = { bases: 'build-base', proteins: 'build-protein', toppings: 'build-topping', dressings: 'build-drizzle' };
+        Object.entries(buildCategories).forEach(([key, cat]) => {
+            (BUILD_OPTIONS[key] || []).forEach(item => {
+                const docRef = db.collection('menu_items').doc();
+                batch.set(docRef, {
+                    id: item.id, name: item.name, category: cat,
+                    tagline: '', description: '', ingredients: [], toppings: [],
+                    price: item.price, priceGrande: null, image: '',
+                    emoji: item.emoji || '', badge: '', onlyGrande: false,
+                    active: true, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+        });
         batch.commit().then(() => {
             showToast('Menú migrado a la base de datos', 'success');
         }).catch(err => {
@@ -8111,6 +8145,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }).catch(err => console.error('Error seeding extras:', err));
     }
 
+    function seedBuildOptionsToFirestore() {
+        const batch = db.batch();
+        const buildCategories = { bases: 'build-base', proteins: 'build-protein', toppings: 'build-topping', dressings: 'build-drizzle' };
+        Object.entries(buildCategories).forEach(([key, cat]) => {
+            (BUILD_OPTIONS[key] || []).forEach(item => {
+                const docRef = db.collection('menu_items').doc();
+                batch.set(docRef, {
+                    id: item.id, name: item.name, category: cat,
+                    tagline: '', description: '', ingredients: [], toppings: [],
+                    price: item.price, priceGrande: null, image: '',
+                    emoji: item.emoji || '', badge: '', onlyGrande: false,
+                    active: true, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+            });
+        });
+        batch.commit().then(() => {
+            console.log('Build options seeded to Firestore');
+        }).catch(err => console.error('Error seeding build options:', err));
+    }
+
     function initMenuFilterArrows(filtersContainer) {
         const leftArrow = $('menu-filters-left');
         const rightArrow = $('menu-filters-right');
@@ -8143,6 +8197,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Category labels for build sub-categories
+    const BUILD_CAT_LABELS = {
+        'build-base': { name: 'Bases', icon: 'fa-circle' },
+        'build-protein': { name: 'Proteínas / Textura', icon: 'fa-seedling' },
+        'build-topping': { name: 'Toppings del Bowl', icon: 'fa-cookie-bite' },
+        'build-drizzle': { name: 'Drizzles', icon: 'fa-droplet' }
+    };
+
     function renderMenuAdmin(catFilter) {
         catFilter = catFilter || 'all';
         const filtersContainer = $('menu-admin-filters');
@@ -8150,11 +8212,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!filtersContainer || !grid) return;
 
         const items = getMenuItems();
+        // Categories for filters: exclude inicio, arma-tu-bowl (shown as custom button), and build sub-categories
         const cats = Object.keys(CATEGORIES).filter(k => k !== 'inicio' && k !== 'arma-tu-bowl');
 
-        // Render filter buttons
+        // Render filter buttons + Arma tu Bowl button
         filtersContainer.innerHTML = `<button class="menu-filter-btn ${catFilter === 'all' ? 'active' : ''}" data-menu-cat="all">Todos</button>` +
-            cats.map(k => `<button class="menu-filter-btn ${catFilter === k ? 'active' : ''}" data-menu-cat="${k}"><i class="fas ${CATEGORIES[k].icon}"></i> ${CATEGORIES[k].name}</button>`).join('');
+            cats.map(k => `<button class="menu-filter-btn ${catFilter === k ? 'active' : ''}" data-menu-cat="${k}"><i class="fas ${CATEGORIES[k].icon}"></i> ${CATEGORIES[k].name}</button>`).join('') +
+            `<button class="menu-filter-btn ${catFilter === 'arma-tu-bowl' ? 'active' : ''}" data-menu-cat="arma-tu-bowl"><i class="fas fa-wand-magic-sparkles"></i> Arma tu Bowl</button>`;
 
         filtersContainer.querySelectorAll('.menu-filter-btn').forEach(btn => {
             btn.addEventListener('click', () => renderMenuAdmin(btn.dataset.menuCat));
@@ -8163,28 +8227,57 @@ document.addEventListener('DOMContentLoaded', function() {
         // Arrow scroll for filters
         initMenuFilterArrows(filtersContainer);
 
-        const filtered = catFilter === 'all' ? items : items.filter(i => i.category === catFilter);
-
-        if (!filtered.length) {
-            grid.innerHTML = '<p class="no-orders">No hay productos en esta categoría</p>';
-            return;
-        }
-
-        grid.innerHTML = filtered.map(item => `
+        // Build card HTML helper
+        function menuCardHTML(item) {
+            const catLabel = BUILD_CAT_LABELS[item.category] ? BUILD_CAT_LABELS[item.category].name : ((CATEGORIES[item.category] || {}).name || item.category);
+            return `
             <div class="menu-admin-card" data-menu-doc-id="${item._docId || ''}">
                 <div class="menu-admin-card-img">
                     ${item.image ? `<img src="${item.image}" alt="${item.name}">` : `<span class="menu-admin-card-emoji">${item.emoji || '🍽️'}</span>`}
                 </div>
                 <div class="menu-admin-card-body">
                     <div class="menu-admin-card-title">${item.emoji || ''} ${item.name}</div>
-                    <div class="menu-admin-card-cat">${(CATEGORIES[item.category] || {}).name || item.category}</div>
+                    <div class="menu-admin-card-cat">${catLabel}</div>
                     <div class="menu-admin-card-price">
                         ${item.onlyGrande || item.priceGrande == null ? '$' + (item.price || 0).toFixed(2) : 'M $' + (item.price || 0).toFixed(2) + ' / G $' + (item.priceGrande || 0).toFixed(2)}
                     </div>
                 </div>
                 <button class="menu-admin-edit-btn" data-edit-doc="${item._docId || ''}"><i class="fas fa-pen"></i></button>
-            </div>
-        `).join('');
+            </div>`;
+        }
+
+        let html = '';
+
+        if (catFilter === 'arma-tu-bowl') {
+            // Show build options grouped by sub-category with dividers
+            const buildGroups = [
+                { cat: 'build-base', label: 'Bases', icon: 'fa-circle' },
+                { cat: 'build-protein', label: 'Proteínas / Textura', icon: 'fa-seedling' },
+                { cat: 'build-topping', label: 'Toppings del Bowl', icon: 'fa-cookie-bite' },
+                { cat: 'build-drizzle', label: 'Drizzles', icon: 'fa-droplet' }
+            ];
+            buildGroups.forEach(group => {
+                const groupItems = items.filter(i => i.category === group.cat);
+                if (groupItems.length > 0) {
+                    html += `<div class="pos-extras-divider"><i class="fas ${group.icon}" style="margin-right:6px"></i>${group.label}</div>`;
+                    html += groupItems.map(item => menuCardHTML(item)).join('');
+                }
+            });
+        } else if (catFilter === 'all') {
+            // Show all regular items + extras, but NOT build options
+            const filtered = items.filter(i => !i.category || !i.category.startsWith('build-'));
+            html = filtered.map(item => menuCardHTML(item)).join('');
+        } else {
+            const filtered = items.filter(i => i.category === catFilter);
+            html = filtered.map(item => menuCardHTML(item)).join('');
+        }
+
+        if (!html) {
+            grid.innerHTML = '<p class="no-orders">No hay productos en esta categoría</p>';
+            return;
+        }
+
+        grid.innerHTML = html;
 
         grid.querySelectorAll('.menu-admin-edit-btn').forEach(btn => {
             btn.addEventListener('click', () => openMenuItemForm(btn.dataset.editDoc));
