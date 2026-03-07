@@ -7998,10 +7998,22 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!hasExtras && menuFirestoreItems.length > 0) {
                 seedExtrasToFirestore();
             }
-            // Re-render admin menu if in admin mode
-            if (adminMode) renderMenuAdmin();
-            // Re-render customer menu if not in admin mode
-            if (!adminMode) {
+            // Re-render all views that show menu/prices
+            if (adminMode) {
+                // Detect which admin section is active and re-render accordingly
+                const activeAdminBtn = document.querySelector('.admin-nav-btn.active');
+                const activeSection = activeAdminBtn ? activeAdminBtn.dataset.section : '';
+                if (activeSection === 'menu') renderMenuAdmin();
+                if (activeSection === 'pos') {
+                    const activePosCat = document.querySelector('#pos-categories .pos-cat-btn.active');
+                    if (activePosCat) renderPOSProducts(activePosCat.dataset.cat);
+                }
+                if (activeSection === 'mesas') {
+                    const activeMesaCat = document.querySelector('.pos-cat-btn.active[data-mesa-cat]');
+                    if (activeMesaCat) renderMesaProducts(activeMesaCat.dataset.mesaCat);
+                }
+            } else {
+                // Re-render customer menu
                 const activeTab = document.querySelector('.tab.active');
                 if (activeTab) renderCategory(activeTab.dataset.category);
             }
