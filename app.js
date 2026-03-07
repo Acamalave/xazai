@@ -5247,6 +5247,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div class="rrhh-collab-actions">
                     ${bioBtn}
                     <button class="rrhh-btn-edit" data-collab-edit="${collab.id}" style="font-size:10px;padding:4px 8px"><i class="fas fa-edit"></i></button>
+                    <button class="rrhh-btn-delete" data-collab-delete="${collab.id}" style="font-size:10px;padding:4px 8px"><i class="fas fa-trash"></i></button>
                 </div>
             </div>`;
     }
@@ -5293,6 +5294,18 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', (e) => {
         const bioBtn = e.target.closest('[data-collab-bio]');
         if (bioBtn) { openBiometricCapture(bioBtn.dataset.collabBio, 'register'); }
+
+        const deleteCollabBtn = e.target.closest('[data-collab-delete]');
+        if (deleteCollabBtn) {
+            const collabId = deleteCollabBtn.dataset.collabDelete;
+            const collab = rrhhCollaborators.find(c => c.id === collabId);
+            if (!collab) return;
+            if (!confirm(`¿Eliminar a ${collab.name}? Esta acción no se puede deshacer.`)) return;
+            db.collection('rrhh_collaborators').doc(collabId).delete().then(() => {
+                showToast(`${collab.name} eliminado`, 'success');
+                loadRRHHCollaborators();
+            }).catch(() => { showToast('Error eliminando colaborador', 'warning'); });
+        }
 
         const editCollabBtn = e.target.closest('[data-collab-edit]');
         if (editCollabBtn) {
